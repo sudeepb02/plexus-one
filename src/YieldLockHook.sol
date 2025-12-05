@@ -7,7 +7,7 @@ import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/types/PoolId.sol";
 import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/types/BeforeSwapDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "v4-core/types/BeforeSwapDelta.sol";
 import {SwapParams} from "v4-core/types/PoolOperation.sol";
 import {IPoolManager, ModifyLiquidityParams} from "v4-core/interfaces/IPoolManager.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
@@ -25,14 +25,24 @@ contract YieldLockHook is BaseHook {
 
     error InvalidCurrency();
     error MarketExpired();
+    error PoolNotRegistered();
 
-    address public immutable YIELD_TOKEN;
-    address public immutable UNDERLYING_TOKEN;
-
-    constructor(IPoolManager _manager, address _yieldToken, address _underlyingToken) BaseHook(_manager) {
-        YIELD_TOKEN = _yieldToken;
-        UNDERLYING_TOKEN = _underlyingToken;
+    struct MarketState {
+        uint256 reserveUnderlying;
+        uint256 reserveYield;
+        uint256 maturity;
+        address yieldToken;
+        address underlyingToken;
+        uint256 totalLpSupply;
     }
+
+    mapping(PoolId => MarketState) public marketStates;
+    mapping(PoolId => mapping(address => uint256)) public lpBalances;
+
+    // Registry for valid pools
+    mapping(PoolId => address) public registeredYieldTokens;
+
+    constructor(IPoolManager _manager) BaseHook(_manager) {}
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return
@@ -54,20 +64,48 @@ contract YieldLockHook is BaseHook {
             });
     }
 
-    function _beforeInitialize(address, PoolKey calldata key, uint160) internal override returns (bytes4) {
-        // Validate that YT is either currency0 or currency1
-        if (Currency.unwrap(key.currency0) != YIELD_TOKEN && Currency.unwrap(key.currency1) != YIELD_TOKEN) {
-            revert InvalidCurrency();
-        }
-        // Validate that UNDERLYING_TOKEN is the other currency
-        if (Currency.unwrap(key.currency0) != UNDERLYING_TOKEN && Currency.unwrap(key.currency1) != UNDERLYING_TOKEN) {
-            revert InvalidCurrency();
-        }
+    function registerPool(PoolKey calldata key, address yieldToken) external {
+        PoolId id = key.toId();
 
-        // Validate that the market has not expired
-        if (block.timestamp >= YieldToken(YIELD_TOKEN).MATURITY()) {
+        if (address(key.hooks) != address(this)) revert("Invalid Hook Address");
+
+        address underlying = YieldToken(yieldToken).UNDERLYING_TOKEN();
+        address token0 = Currency.unwrap(key.currency0);
+        address token1 = Currency.unwrap(key.currency1);
+
+        bool isValidPair = (token0 == yieldToken && token1 == underlying) ||
+            (token1 == yieldToken && token0 == underlying);
+
+        if (!isValidPair) revert InvalidCurrency();
+
+        registeredYieldTokens[id] = yieldToken;
+    }
+
+    function _beforeInitialize(address, PoolKey calldata key, uint160) internal override returns (bytes4) {
+        PoolId id = key.toId();
+        address ytAddress = registeredYieldTokens[id];
+
+        if (ytAddress == address(0)) revert PoolNotRegistered();
+
+        address token0 = Currency.unwrap(key.currency0);
+        address token1 = Currency.unwrap(key.currency1);
+        address utAddress = (token0 == ytAddress) ? token1 : token0;
+
+        // Validate maturity
+        uint256 maturity = YieldToken(ytAddress).MATURITY();
+        if (block.timestamp >= maturity) {
             revert MarketExpired();
         }
+
+        // Initialize Market State
+        marketStates[id] = MarketState({
+            reserveUnderlying: 0,
+            reserveYield: 0,
+            maturity: maturity,
+            yieldToken: ytAddress,
+            underlyingToken: utAddress,
+            totalLpSupply: 0
+        });
 
         return BaseHook.beforeInitialize.selector;
     }
