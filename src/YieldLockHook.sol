@@ -13,6 +13,10 @@ import {IPoolManager, ModifyLiquidityParams} from "v4-core/interfaces/IPoolManag
 import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+import {YieldToken} from "./YieldToken.sol";
+
 contract YieldLockHook is BaseHook {
     using PoolIdLibrary for PoolKey;
     using SafeCast for int256;
@@ -20,6 +24,7 @@ contract YieldLockHook is BaseHook {
     using CurrencyLibrary for Currency;
 
     error InvalidCurrency();
+    error MarketExpired();
 
     address public immutable YIELD_TOKEN;
     address public immutable UNDERLYING_TOKEN;
@@ -49,8 +54,21 @@ contract YieldLockHook is BaseHook {
             });
     }
 
-    // Required to validate that the hook is being used on the correct pool
     function _beforeInitialize(address, PoolKey calldata key, uint160) internal override returns (bytes4) {
+        // Validate that YT is either currency0 or currency1
+        if (Currency.unwrap(key.currency0) != YIELD_TOKEN && Currency.unwrap(key.currency1) != YIELD_TOKEN) {
+            revert InvalidCurrency();
+        }
+        // Validate that UNDERLYING_TOKEN is the other currency
+        if (Currency.unwrap(key.currency0) != UNDERLYING_TOKEN && Currency.unwrap(key.currency1) != UNDERLYING_TOKEN) {
+            revert InvalidCurrency();
+        }
+
+        // Validate that the market has not expired
+        if (block.timestamp >= YieldToken(YIELD_TOKEN).MATURITY()) {
+            revert MarketExpired();
+        }
+
         return BaseHook.beforeInitialize.selector;
     }
 
