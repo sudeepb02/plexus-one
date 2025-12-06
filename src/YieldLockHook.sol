@@ -16,11 +16,11 @@ import {SafeCast} from "v4-core/libraries/SafeCast.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import {ERC6909} from "v4-core/ERC6909.sol";
 
 import {YieldToken} from "./YieldToken.sol";
 
-contract YieldLockHook is BaseHook, Ownable, ERC1155 {
+contract YieldLockHook is BaseHook, Ownable, ERC6909 {
     using PoolIdLibrary for PoolKey;
     using SafeCast for int256;
     using BeforeSwapDeltaLibrary for BeforeSwapDelta;
@@ -50,7 +50,7 @@ contract YieldLockHook is BaseHook, Ownable, ERC1155 {
     error MarketNotInitialized();
     error MarketAlreadySeeded();
 
-    constructor(IPoolManager _manager) BaseHook(_manager) Ownable(msg.sender) ERC1155("") {}
+    constructor(IPoolManager _manager) BaseHook(_manager) Ownable(msg.sender) {}
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return
@@ -161,7 +161,7 @@ contract YieldLockHook is BaseHook, Ownable, ERC1155 {
         state.reserveUnderlying += amountUnderlying;
         state.reserveYield += amountYield;
         state.totalLpSupply += shares;
-        _mint(msg.sender, uint256(PoolId.unwrap(id)), shares, "");
+        _mint(msg.sender, uint256(PoolId.unwrap(id)), shares);
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
@@ -207,6 +207,6 @@ contract YieldLockHook is BaseHook, Ownable, ERC1155 {
         state.reserveYield = amountYield;
         state.totalLpSupply = amountUnderlying; // Initial shares = Underlying amount
 
-        _mint(msg.sender, uint256(PoolId.unwrap(id)), amountUnderlying, "");
+        _mint(msg.sender, uint256(PoolId.unwrap(id)), amountUnderlying);
     }
 }
