@@ -33,6 +33,10 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
     error InvalidAmount();
     error MarketExpired();
     error PoolNotRegistered();
+    error MarketNotInitialized();
+    error MarketAlreadySeeded();
+    error AddLiquidityThroughHook();
+    error RemoveLiquidityThroughHook();
 
     struct MarketState {
         uint128 reserveUnderlying;
@@ -47,9 +51,6 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
 
     // Registry for valid pools
     mapping(PoolId => address) public registeredYieldTokens;
-
-    error MarketNotInitialized();
-    error MarketAlreadySeeded();
 
     constructor(IPoolManager _manager) BaseHook(_manager) Ownable(msg.sender) {}
 
@@ -112,7 +113,7 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         ModifyLiquidityParams calldata,
         bytes calldata
     ) internal override returns (bytes4) {
-        return BaseHook.beforeAddLiquidity.selector;
+        revert AddLiquidityThroughHook();
     }
 
     function _beforeRemoveLiquidity(
@@ -121,7 +122,7 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         ModifyLiquidityParams calldata,
         bytes calldata
     ) internal override returns (bytes4) {
-        return BaseHook.beforeRemoveLiquidity.selector;
+        revert RemoveLiquidityThroughHook();
     }
 
     function _beforeSwap(
