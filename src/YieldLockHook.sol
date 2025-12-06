@@ -64,22 +64,9 @@ contract YieldLockHook is BaseHook {
             });
     }
 
-    function registerPool(PoolKey calldata key, address yieldToken) external {
-        PoolId id = key.toId();
-
-        if (address(key.hooks) != address(this)) revert("Invalid Hook Address");
-
-        address underlying = YieldToken(yieldToken).UNDERLYING_TOKEN();
-        address token0 = Currency.unwrap(key.currency0);
-        address token1 = Currency.unwrap(key.currency1);
-
-        bool isValidPair = (token0 == yieldToken && token1 == underlying) ||
-            (token1 == yieldToken && token0 == underlying);
-
-        if (!isValidPair) revert InvalidCurrency();
-
-        registeredYieldTokens[id] = yieldToken;
-    }
+    /////////////////////////////////////////////////////////////////////////////////////
+    //                                    V4 HOOKS                                     //
+    /////////////////////////////////////////////////////////////////////////////////////
 
     function _beforeInitialize(address, PoolKey calldata key, uint160) internal override returns (bytes4) {
         PoolId id = key.toId();
@@ -135,5 +122,26 @@ contract YieldLockHook is BaseHook {
         bytes calldata
     ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
         return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+    }
+
+    /////////////////////////////////////////////////////////////////////////////////////
+    //                             EXTERNAL FUNCTION                                   //
+    /////////////////////////////////////////////////////////////////////////////////////
+
+    function registerPool(PoolKey calldata key, address yieldToken) external {
+        PoolId id = key.toId();
+
+        if (address(key.hooks) != address(this)) revert("Invalid Hook Address");
+
+        address underlying = YieldToken(yieldToken).UNDERLYING_TOKEN();
+        address token0 = Currency.unwrap(key.currency0);
+        address token1 = Currency.unwrap(key.currency1);
+
+        bool isValidPair = (token0 == yieldToken && token1 == underlying) ||
+            (token1 == yieldToken && token0 == underlying);
+
+        if (!isValidPair) revert InvalidCurrency();
+
+        registeredYieldTokens[id] = yieldToken;
     }
 }
