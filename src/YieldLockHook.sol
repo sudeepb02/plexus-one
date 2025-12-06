@@ -14,6 +14,7 @@ import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 import {YieldToken} from "./YieldToken.sol";
@@ -23,6 +24,8 @@ contract YieldLockHook is BaseHook, Ownable {
     using SafeCast for int256;
     using BeforeSwapDeltaLibrary for BeforeSwapDelta;
     using CurrencyLibrary for Currency;
+
+    using SafeERC20 for IERC20;
 
     error InvalidCurrency();
     error InvalidAmount();
@@ -167,7 +170,7 @@ contract YieldLockHook is BaseHook, Ownable {
         if (state.totalLpSupply > 0) revert MarketAlreadySeeded();
         if (amountUnderlying == 0 || amountYield == 0) revert InvalidAmount();
 
-        IERC20(state.underlyingToken).transferFrom(msg.sender, address(this), amountUnderlying);
+        IERC20(state.underlyingToken).safeTransferFrom(msg.sender, address(this), amountUnderlying);
 
         // Mint YieldToken to the Hook (hook maintains all the reserve amounts and calcualtions)
         YieldToken(state.yieldToken).mint(address(this), amountYield);
