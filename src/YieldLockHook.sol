@@ -154,14 +154,42 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
 
         IERC20(state.underlyingToken).safeTransferFrom(msg.sender, address(this), amountUnderlying);
 
-        // Mint Yield to Hook (Reserve)
+        // Mint Yield to Hook (Reserve), acts as virtual tokens for accounting
         YieldToken(state.yieldToken).mint(address(this), amountYield);
 
         // Update state
         state.reserveUnderlying += amountUnderlying;
         state.reserveYield += amountYield;
         state.totalLpSupply += shares;
+
+        // Mint LP tokens (ERC6909)
         _mint(msg.sender, uint256(PoolId.unwrap(id)), shares);
+    }
+
+    function removeLiquidity(PoolKey calldata key, uint256 shares) external returns (uint256 amountUnderlying, uint256 amountYield) {
+        PoolId id = key.toId();
+        MarketState storage state = marketStates[id];
+
+        if (state.totalLpSupply == 0) revert MarketNotInitialized();
+        if (shares == 0) revert InvalidAmount();
+
+        // Calculate amounts for Underlying and YieldToken
+        amountUnderlying = (shares * state.reserveUnderlying) / state.totalLpSupply;
+        amountYield = (shares * state.reserveYield) / state.totalLpSupply;
+
+        // Burn LP tokens (ERC6909)
+        _burn(msg.sender, uint256(PoolId.unwrap(id)), shares);
+
+        // Update state
+        state.reserveUnderlying -= amountUnderlying;
+        state.reserveYield -= amountYield;
+        state.totalLpSupply -= shares;
+
+        // Transfer Underlying to user
+        IERC20(state.underlyingToken).safeTransfer(msg.sender, amountUnderlying);
+
+        // Burn YieldTokens from the Hook (virtual tokens removed from circulation)
+        YieldToken(state.yieldToken).burn(address(this), amountYield);
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
