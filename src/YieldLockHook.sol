@@ -23,6 +23,7 @@ import {YieldToken} from "./YieldToken.sol";
 contract YieldLockHook is BaseHook, Ownable, ERC6909 {
     using PoolIdLibrary for PoolKey;
     using SafeCast for int256;
+    using SafeCast for uint256;
     using BeforeSwapDeltaLibrary for BeforeSwapDelta;
     using CurrencyLibrary for Currency;
 
@@ -158,9 +159,9 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         YieldToken(state.yieldToken).mint(address(this), amountYield);
 
         // Update state
-        state.reserveUnderlying += uint128(amountUnderlying);
-        state.reserveYield += uint128(amountYield);
-        state.totalLpSupply += uint128(shares);
+        state.reserveUnderlying += amountUnderlying.toUint128();
+        state.reserveYield += amountYield.toUint128();
+        state.totalLpSupply += shares.toUint128();
 
         // Mint LP tokens (ERC6909)
         _mint(msg.sender, uint256(PoolId.unwrap(id)), shares);
@@ -181,9 +182,9 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         _burn(msg.sender, uint256(PoolId.unwrap(id)), shares);
 
         // Update state
-        state.reserveUnderlying -= uint128(amountUnderlying);
-        state.reserveYield -= uint128(amountYield);
-        state.totalLpSupply -= uint128(shares);
+        state.reserveUnderlying -= amountUnderlying.toUint128();
+        state.reserveYield -= amountYield.toUint128();
+        state.totalLpSupply -= shares.toUint128();
 
         // Transfer Underlying to user
         IERC20(state.underlyingToken).safeTransfer(msg.sender, amountUnderlying);
@@ -231,9 +232,9 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         // Mint YieldToken to the Hook (hook maintains all the reserve amounts and calcualtions)
         YieldToken(state.yieldToken).mint(address(this), amountYield);
 
-        state.reserveUnderlying = uint128(amountUnderlying);
-        state.reserveYield = uint128(amountYield);
-        state.totalLpSupply = uint128(amountUnderlying); // Initial shares = Underlying amount
+        state.reserveUnderlying = amountUnderlying.toUint128();
+        state.reserveYield = amountYield.toUint128();
+        state.totalLpSupply = amountUnderlying.toUint128(); // Initial shares = Underlying amount
 
         _mint(msg.sender, uint256(PoolId.unwrap(id)), amountUnderlying);
     }
