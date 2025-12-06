@@ -34,12 +34,12 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
     error PoolNotRegistered();
 
     struct MarketState {
-        uint256 reserveUnderlying;
-        uint256 reserveYield;
-        uint256 maturity;
+        uint128 reserveUnderlying;
+        uint128 reserveYield;
+        uint128 totalLpSupply;
+        uint48 maturity;
         address yieldToken;
         address underlyingToken;
-        uint256 totalLpSupply;
     }
 
     mapping(PoolId => MarketState) public marketStates;
@@ -96,10 +96,10 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         marketStates[id] = MarketState({
             reserveUnderlying: 0,
             reserveYield: 0,
-            maturity: maturity,
+            totalLpSupply: 0,
+            maturity: uint48(maturity),
             yieldToken: ytAddress,
-            underlyingToken: utAddress,
-            totalLpSupply: 0
+            underlyingToken: utAddress
         });
 
         return BaseHook.beforeInitialize.selector;
@@ -158,9 +158,9 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         YieldToken(state.yieldToken).mint(address(this), amountYield);
 
         // Update state
-        state.reserveUnderlying += amountUnderlying;
-        state.reserveYield += amountYield;
-        state.totalLpSupply += shares;
+        state.reserveUnderlying += uint128(amountUnderlying);
+        state.reserveYield += uint128(amountYield);
+        state.totalLpSupply += uint128(shares);
 
         // Mint LP tokens (ERC6909)
         _mint(msg.sender, uint256(PoolId.unwrap(id)), shares);
@@ -181,9 +181,9 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         _burn(msg.sender, uint256(PoolId.unwrap(id)), shares);
 
         // Update state
-        state.reserveUnderlying -= amountUnderlying;
-        state.reserveYield -= amountYield;
-        state.totalLpSupply -= shares;
+        state.reserveUnderlying -= uint128(amountUnderlying);
+        state.reserveYield -= uint128(amountYield);
+        state.totalLpSupply -= uint128(shares);
 
         // Transfer Underlying to user
         IERC20(state.underlyingToken).safeTransfer(msg.sender, amountUnderlying);
@@ -231,9 +231,9 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         // Mint YieldToken to the Hook (hook maintains all the reserve amounts and calcualtions)
         YieldToken(state.yieldToken).mint(address(this), amountYield);
 
-        state.reserveUnderlying = amountUnderlying;
-        state.reserveYield = amountYield;
-        state.totalLpSupply = amountUnderlying; // Initial shares = Underlying amount
+        state.reserveUnderlying = uint128(amountUnderlying);
+        state.reserveYield = uint128(amountYield);
+        state.totalLpSupply = uint128(amountUnderlying); // Initial shares = Underlying amount
 
         _mint(msg.sender, uint256(PoolId.unwrap(id)), amountUnderlying);
     }
