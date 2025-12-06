@@ -25,6 +25,7 @@ contract YieldLockHook is BaseHook, Ownable {
     using CurrencyLibrary for Currency;
 
     error InvalidCurrency();
+    error InvalidAmount();
     error MarketExpired();
     error PoolNotRegistered();
 
@@ -151,5 +152,30 @@ contract YieldLockHook is BaseHook, Ownable {
         if (!isValidPair) revert InvalidCurrency();
 
         registeredYieldTokens[id] = yieldToken;
+    }
+
+    // Seed initial liquidity to the market, which is used to determine the initial rate
+    function initializeLiquidity(
+        PoolKey calldata key,
+        uint256 amountUnderlying,
+        uint256 amountYield
+    ) external onlyOwner {
+        PoolId id = key.toId();
+        MarketState storage state = marketStates[id];
+
+        if (state.maturity == 0) revert MarketNotInitialized(); // Must be initialized via V4 first
+        if (state.totalLpSupply > 0) revert MarketAlreadySeeded();
+        if (amountUnderlying == 0 || amountYield == 0) revert InvalidAmount();
+
+        IERC20(state.underlyingToken).transferFrom(msg.sender, address(this), amountUnderlying);
+
+        // Mint YieldToken to the Hook (hook maintains all the reserve amounts and calcualtions)
+        YieldToken(state.yieldToken).mint(address(this), amountYield);
+
+        state.reserveUnderlying = amountUnderlying;
+        state.reserveYield = amountYield;
+        state.totalLpSupply = amountUnderlying; // Initial shares = Underlying amount
+
+        lpBalances[id][msg.sender] = amountUnderlying;
     }
 }
