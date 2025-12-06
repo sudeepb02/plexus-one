@@ -136,6 +136,34 @@ contract YieldLockHook is BaseHook, Ownable {
     //                        EXTERNAL PUBLIC FUNCTIONS                                //
     /////////////////////////////////////////////////////////////////////////////////////
 
+    // Liquidity is added to the contract in a single token (Underlying) and the hook calculates
+    // the amount of YieldToken to mint based on the current reserve ratio.
+    // YieldTokens are minted to the Hook contract to maintain reserves
+    function addLiquidity(PoolKey calldata key, uint256 amountUnderlying) external returns (uint256 shares) {
+        PoolId id = key.toId();
+        MarketState storage state = marketStates[id];
+
+        if (state.maturity == 0 || state.totalLpSupply == 0) revert MarketNotInitialized();
+        if (block.timestamp >= state.maturity) revert MarketExpired();
+
+        // Calculate required Yield to match current ratio
+        uint256 amountYield = (amountUnderlying * state.reserveYield) / state.reserveUnderlying;
+
+        // Calculate Shares (LP tokens)
+        shares = (amountUnderlying * state.totalLpSupply) / state.reserveUnderlying;
+
+        IERC20(state.underlyingToken).safeTransferFrom(msg.sender, address(this), amountUnderlying);
+
+        // Mint Yield to Hook (Reserve)
+        YieldToken(state.yieldToken).mint(address(this), amountYield);
+
+        // Update state
+        state.reserveUnderlying += amountUnderlying;
+        state.reserveYield += amountYield;
+        state.totalLpSupply += shares;
+        lpBalances[id][msg.sender] += shares;
+    }
+
     /////////////////////////////////////////////////////////////////////////////////////
     //                         EXTERNAL ADMIN FUNCTIONS                                //
     /////////////////////////////////////////////////////////////////////////////////////
