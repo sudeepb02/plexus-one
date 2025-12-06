@@ -14,10 +14,11 @@ import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 import {YieldToken} from "./YieldToken.sol";
 
-contract YieldLockHook is BaseHook {
+contract YieldLockHook is BaseHook, Ownable {
     using PoolIdLibrary for PoolKey;
     using SafeCast for int256;
     using BeforeSwapDeltaLibrary for BeforeSwapDelta;
@@ -42,22 +43,25 @@ contract YieldLockHook is BaseHook {
     // Registry for valid pools
     mapping(PoolId => address) public registeredYieldTokens;
 
-    constructor(IPoolManager _manager) BaseHook(_manager) {}
+    error MarketNotInitialized();
+    error MarketAlreadySeeded();
+
+    constructor(IPoolManager _manager) BaseHook(_manager) Ownable(msg.sender) {}
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return
             Hooks.Permissions({
-                beforeInitialize: true, //
+                beforeInitialize: true,
                 afterInitialize: false,
-                beforeAddLiquidity: true, //
-                beforeRemoveLiquidity: true, //
+                beforeAddLiquidity: true,
+                beforeRemoveLiquidity: true,
                 afterAddLiquidity: false,
                 afterRemoveLiquidity: false,
-                beforeSwap: true, //
+                beforeSwap: true,
                 afterSwap: false,
                 beforeDonate: false,
                 afterDonate: false,
-                beforeSwapReturnDelta: true, //
+                beforeSwapReturnDelta: true,
                 afterSwapReturnDelta: false,
                 afterAddLiquidityReturnDelta: false,
                 afterRemoveLiquidityReturnDelta: false
@@ -125,10 +129,14 @@ contract YieldLockHook is BaseHook {
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
-    //                             EXTERNAL FUNCTION                                   //
+    //                        EXTERNAL PUBLIC FUNCTIONS                                //
     /////////////////////////////////////////////////////////////////////////////////////
 
-    function registerPool(PoolKey calldata key, address yieldToken) external {
+    /////////////////////////////////////////////////////////////////////////////////////
+    //                         EXTERNAL ADMIN FUNCTIONS                                //
+    /////////////////////////////////////////////////////////////////////////////////////
+
+    function registerPool(PoolKey calldata key, address yieldToken) external onlyOwner {
         PoolId id = key.toId();
 
         if (address(key.hooks) != address(this)) revert("Invalid Hook Address");
