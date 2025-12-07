@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.26;
 
 // V4 imports
@@ -18,6 +18,10 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC6909} from "v4-core/ERC6909.sol";
 
+import {FixedPointMathLib} from "solmate/src/utils/FixedPointMathLib.sol";
+import {LogExpMath} from "./lib/LogExpMath.sol";
+import {YieldMath} from "./lib/YieldMath.sol";
+
 import {YieldToken} from "./YieldToken.sol";
 
 contract YieldLockHook is BaseHook, Ownable, ERC6909 {
@@ -28,6 +32,9 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
     using CurrencyLibrary for Currency;
 
     using SafeERC20 for IERC20;
+    using FixedPointMathLib for uint256;
+    using LogExpMath for uint256;
+    using YieldMath for uint256;
 
     error InvalidCurrency();
     error InvalidAmount();
@@ -134,7 +141,60 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         SwapParams calldata params,
         bytes calldata
     ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
-        return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        MarketState storage state = marketStates[key.toId()];
+
+        if (block.timestamp >= state.maturity) revert MarketExpired();
+        if (state.totalLpSupply == 0) revert MarketNotInitialized();
+
+        bool isExactInput;
+        int128 unspecifiedDelta;
+
+        // scoped block to avoid stack too deep error
+        {
+            // 1. Determine Swap Context from params
+            Currency currencyIn;
+            Currency currencyOut;
+            uint256 amount;
+
+            (currencyIn, currencyOut, amount, isExactInput) = _getSwapContext(key, params);
+            bool isInputUnderlying = Currency.unwrap(currencyIn) == state.underlyingToken;
+
+            // 2. Calculate Swap Result
+            (uint256 amountIn, uint256 amountOut, uint256 newRUnd, uint256 newRYield) = _calculateSwapResult(
+                state,
+                isExactInput,
+                isInputUnderlying,
+                amount
+            );
+
+            // 3. Update State with new reserve values
+            state.reserveUnderlying = newRUnd.toUint128();
+            state.reserveYield = newRYield.toUint128();
+
+            _take(currencyIn, amountIn);
+            _settle(currencyOut, amountOut);
+
+            // 4. Construct Delta & Settle
+            // We return a delta that cancels out the user's specified amount, effectively skipping the core swap logic.
+            // We must also return the correct unspecified delta so the PoolManager knows how much the user receives/pays.
+
+            if (isExactInput) {
+                // Exact Input: Unspecified is Output
+                // Hook gives Output -> Negative Delta
+                unspecifiedDelta = -amountOut.toInt128();
+            } else {
+                // Exact Output: Unspecified is Input
+                // Hook takes Input -> Positive Delta
+                unspecifiedDelta = amountIn.toInt128();
+            }
+        }
+
+        BeforeSwapDelta delta = toBeforeSwapDelta(
+            -int128(params.amountSpecified), // Specified: Cancel out the input/output
+            unspecifiedDelta // Unspecified: The amount the hook takes/gives
+        );
+
+        return (BaseHook.beforeSwap.selector, delta, 0);
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
@@ -279,6 +339,36 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         } else {
             currencyIn = key.currency1;
             currencyOut = key.currency0;
+        }
+    }
+
+    function _calculateSwapResult(
+        MarketState storage state,
+        bool isExactInput,
+        bool isInputUnderlying,
+        uint256 amount
+    ) internal view returns (uint256 amountIn, uint256 amountOut, uint256 newRUnd, uint256 newRYield) {
+        uint256 t = _getNormalizedTime(state.startTime, state.maturity);
+
+        if (isExactInput) {
+            (amountOut, newRUnd, newRYield) = YieldMath.computeOutGivenExactIn(
+                state.reserveUnderlying,
+                state.reserveYield,
+                isInputUnderlying,
+                amount,
+                t
+            );
+            amountIn = amount;
+        } else {
+            // amount is amountOut
+            (amountIn, newRUnd, newRYield) = YieldMath.computeInGivenExactOut(
+                state.reserveUnderlying,
+                state.reserveYield,
+                !isInputUnderlying,
+                amount,
+                t
+            );
+            amountOut = amount;
         }
     }
 
