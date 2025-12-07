@@ -42,6 +42,7 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         uint128 reserveUnderlying;
         uint128 reserveYield;
         uint128 totalLpSupply;
+        uint48 startTime;
         uint48 maturity;
         address yieldToken;
         address underlyingToken;
@@ -99,6 +100,7 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
             reserveUnderlying: 0,
             reserveYield: 0,
             totalLpSupply: 0,
+            startTime: uint48(block.timestamp),
             maturity: uint48(maturity),
             yieldToken: ytAddress,
             underlyingToken: utAddress
