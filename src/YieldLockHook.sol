@@ -84,6 +84,7 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         address ytAddress = registeredYieldTokens[id];
 
         if (ytAddress == address(0)) revert PoolNotRegistered();
+        if (key.currency0.isAddressZero()) revert InvalidCurrency(); // Disallow native tokens
 
         address token0 = Currency.unwrap(key.currency0);
         address token1 = Currency.unwrap(key.currency1);
