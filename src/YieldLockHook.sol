@@ -37,6 +37,7 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
 
     error InvalidCurrency();
     error InvalidAmount();
+    error InvalidMaturity();
     error MarketExpired();
     error PoolNotRegistered();
     error MarketNotInitialized();
@@ -98,9 +99,8 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
 
         // Validate maturity
         uint256 maturity = YieldToken(ytAddress).MATURITY();
-        if (block.timestamp >= maturity) {
-            revert MarketExpired();
-        }
+        if (maturity >= type(uint48).max) revert InvalidMaturity();
+        if (block.timestamp >= maturity) revert MarketExpired();
 
         // Initialize Market State
         marketStates[id] = MarketState({
@@ -108,6 +108,8 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
             reserveYield: 0,
             totalLpSupply: 0,
             startTime: uint48(block.timestamp),
+            // casting maturity to 'uint48' is safe as we're validating the maturity value above
+            // forge-lint: disable-next-line(unsafe-typecast)
             maturity: uint48(maturity),
             yieldToken: ytAddress,
             underlyingToken: utAddress
