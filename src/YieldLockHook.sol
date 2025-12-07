@@ -262,4 +262,22 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
 
         return ((uint256(maturity) - currentTime) * 1e18) / (uint256(maturity) - startTime);
     }
+
+    function _getSwapContext(
+        PoolKey calldata key,
+        SwapParams calldata params
+    ) internal pure returns (Currency currencyIn, Currency currencyOut, uint256 amount, bool isExactInput) {
+        // amountSpecified < 0 implies Exact Input (User specifies amount to pay, hence negative)
+        // amountSpecified > 0 implies Exact Output (User specifies amount to receive, hence positive)
+        isExactInput = params.amountSpecified < 0;
+        amount = isExactInput ? uint256(-params.amountSpecified) : uint256(params.amountSpecified);
+
+        if (params.zeroForOne) {
+            currencyIn = key.currency0;
+            currencyOut = key.currency1;
+        } else {
+            currencyIn = key.currency1;
+            currencyOut = key.currency0;
+        }
+    }
 }
