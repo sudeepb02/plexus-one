@@ -6,7 +6,6 @@ import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/types/PoolId.sol";
-import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "v4-core/types/BeforeSwapDelta.sol";
 import {SwapParams} from "v4-core/types/PoolOperation.sol";
 import {IPoolManager, ModifyLiquidityParams} from "v4-core/interfaces/IPoolManager.sol";
@@ -119,19 +118,19 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
 
     function _beforeAddLiquidity(
         address,
-        PoolKey calldata key,
+        PoolKey calldata,
         ModifyLiquidityParams calldata,
         bytes calldata
-    ) internal override returns (bytes4) {
+    ) internal override pure returns (bytes4) {
         revert AddLiquidityThroughHook();
     }
 
     function _beforeRemoveLiquidity(
         address,
-        PoolKey calldata key,
+        PoolKey calldata,
         ModifyLiquidityParams calldata,
         bytes calldata
-    ) internal override returns (bytes4) {
+    ) internal override pure returns (bytes4) {
         revert RemoveLiquidityThroughHook();
     }
 
