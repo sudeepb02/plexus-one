@@ -281,4 +281,14 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
             currencyOut = key.currency0;
         }
     }
+
+    function _settle(Currency currency, uint256 amount) internal {
+        poolManager.sync(currency);
+        currency.transfer(address(poolManager), amount);
+        poolManager.settle();
+    }
+
+    function _take(Currency currency, uint256 amount) internal {
+        poolManager.take(currency, address(this), amount);
+    }
 }
