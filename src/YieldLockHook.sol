@@ -170,7 +170,10 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         _mint(msg.sender, uint256(PoolId.unwrap(id)), shares);
     }
 
-    function removeLiquidity(PoolKey calldata key, uint256 shares) external returns (uint256 amountUnderlying, uint256 amountYield) {
+    function removeLiquidity(
+        PoolKey calldata key,
+        uint256 shares
+    ) external returns (uint256 amountUnderlying, uint256 amountYield) {
         PoolId id = key.toId();
         MarketState storage state = marketStates[id];
 
@@ -240,5 +243,23 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         state.totalLpSupply = amountUnderlying.toUint128(); // Initial shares = Underlying amount
 
         _mint(msg.sender, uint256(PoolId.unwrap(id)), amountUnderlying);
+    }
+
+    /////////////////////////////////////////////////////////////////////////////////////
+    //                         INTERNAL HELPER FUNCTIONS                               //
+    /////////////////////////////////////////////////////////////////////////////////////
+
+    function _getNormalizedTime(uint48 startTime, uint48 maturity) internal view returns (uint256) {
+        // Normalized time is the fractional representation of how much time has passed from the startTime to maturity
+        // It's value is 1 at startTime and 0 at maturity
+        // Normalized time = (maturity - currentTime) / (maturity - startTime)
+        // The value is scaled by 1e18 for precision
+
+        uint256 currentTime = block.timestamp;
+
+        // Return 0 if the maturity has already passed
+        if (currentTime >= maturity) return 0;
+
+        return ((uint256(maturity) - currentTime) * 1e18) / (uint256(maturity) - startTime);
     }
 }
