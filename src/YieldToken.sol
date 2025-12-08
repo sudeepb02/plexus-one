@@ -14,7 +14,6 @@ contract YieldToken is ERC20, Ownable {
     address public hook;
     IYieldOracle public oracle;
 
-    address public immutable POOL_MANAGER;
     IERC20 public immutable UNDERLYING_TOKEN;
     uint256 public immutable MATURITY;
 
@@ -45,11 +44,9 @@ contract YieldToken is ERC20, Ownable {
     constructor(
         string memory name,
         string memory symbol,
-        address _poolManager,
         address _underlying,
         uint256 _maturity
     ) ERC20(name, symbol) Ownable(msg.sender) {
-        POOL_MANAGER = _poolManager;
         UNDERLYING_TOKEN = IERC20(_underlying);
         MATURITY = _maturity;
 
