@@ -69,7 +69,7 @@ contract YieldToken is ERC20, Ownable {
     }
 
     function calculateAccruedYield(uint256 amountYt) external view returns (uint256) {
-        _calculateAccruedYield(amountYt);
+        return _calculateAccruedYield(amountYt);
     }
 
     ////////////////////// SHORT POSITIONS (ISSUANCE OF YT) /////////////////////////////
