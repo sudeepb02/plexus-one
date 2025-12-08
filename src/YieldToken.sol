@@ -68,6 +68,10 @@ contract YieldToken is ERC20, Ownable {
         _updateGlobalIndex();
     }
 
+    function calculateAccruedYield(uint256 amountYt) external view returns (uint256) {
+        _calculateAccruedYield(amountYt);
+    }
+
     ////////////////////// SHORT POSITIONS (ISSUANCE OF YT) /////////////////////////////
 
     function mintSynthetic(uint256 amountCollateral, uint256 amountYt) external {
@@ -118,7 +122,7 @@ contract YieldToken is ERC20, Ownable {
         if (block.timestamp < MATURITY) revert MarketNotExpired();
 
         // Payout = amountYt * (FinalIndex - InitialIndex)
-        uint256 payout = (amountYt * (globalIndex - INITIAL_INDEX)) / 1e18;
+        uint256 payout = _calculateAccruedYield(amountYt);
 
         _burn(msg.sender, amountYt);
 
@@ -134,7 +138,7 @@ contract YieldToken is ERC20, Ownable {
 
         // Calculate Final Debt (money owed to Long YT holders,
         // stored in the contract for future claim by long YT holders
-        uint256 debt = (vault.mintedAmount * (globalIndex - INITIAL_INDEX)) / 1e18;
+        uint256 debt = _calculateAccruedYield(vault.mintedAmount);
 
         uint256 remainingCollateral = 0;
         if (vault.collateral > debt) {
@@ -171,6 +175,11 @@ contract YieldToken is ERC20, Ownable {
     // For wrapped modifier onlyHook
     function _onlyHook() internal view {
         if (msg.sender != hook) revert OnlyHook();
+    }
+
+    function _calculateAccruedYield(uint256 amountYt) internal view returns (uint256) {
+        if (globalIndex <= INITIAL_INDEX) return 0;
+        return (amountYt * (globalIndex - INITIAL_INDEX)) / 1e18;
     }
 
     function _update(address from, address to, uint256 value) internal override {
