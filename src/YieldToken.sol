@@ -15,7 +15,7 @@ contract YieldToken is ERC20, Ownable {
     IYieldOracle public oracle;
 
     address public immutable POOL_MANAGER;
-    address public immutable UNDERLYING_TOKEN;
+    IERC20 public immutable UNDERLYING_TOKEN;
     uint256 public immutable MATURITY;
 
     // Global State
@@ -50,7 +50,7 @@ contract YieldToken is ERC20, Ownable {
         uint256 _maturity
     ) ERC20(name, symbol) Ownable(msg.sender) {
         POOL_MANAGER = _poolManager;
-        UNDERLYING_TOKEN = _underlying;
+        UNDERLYING_TOKEN = IERC20(_underlying);
         MATURITY = _maturity;
 
         globalIndex = INITIAL_INDEX;
@@ -81,7 +81,7 @@ contract YieldToken is ERC20, Ownable {
 
         // 1. Transfer Collateral to the contract
         if (amountCollateral > 0) {
-            IERC20(UNDERLYING_TOKEN).safeTransferFrom(msg.sender, address(this), amountCollateral);
+            UNDERLYING_TOKEN.safeTransferFrom(msg.sender, address(this), amountCollateral);
             vault.collateral += amountCollateral;
         }
 
@@ -108,7 +108,7 @@ contract YieldToken is ERC20, Ownable {
         if (amountCollateral > 0) {
             if (vault.collateral < amountCollateral) revert InvalidAmount();
             vault.collateral -= amountCollateral;
-            IERC20(UNDERLYING_TOKEN).safeTransfer(msg.sender, amountCollateral);
+            UNDERLYING_TOKEN.safeTransfer(msg.sender, amountCollateral);
         }
     }
 
