@@ -37,6 +37,7 @@ contract YieldToken is ERC20, Ownable {
     uint256 public constant MIN_COLLATERAL_RATIO = 0.1e18;
 
     error MarketExpired();
+    error MarketNotExpired();
     error InvalidAmount();
     error HookAlreadySet();
     error OnlyHook();
@@ -110,6 +111,45 @@ contract YieldToken is ERC20, Ownable {
     }
 
     ////////////////////// LONG POSITIONS (YIELD REDEMPTION) ////////////////////////////
+
+    function redeemYield(uint256 amountYt) external {
+        _updateGlobalIndex();
+
+        if (block.timestamp < MATURITY) revert MarketNotExpired();
+
+        // Payout = amountYt * (FinalIndex - InitialIndex)
+        uint256 payout = (amountYt * (globalIndex - INITIAL_INDEX)) / 1e18;
+
+        _burn(msg.sender, amountYt);
+
+        UNDERLYING_TOKEN.safeTransfer(msg.sender, payout);
+    }
+
+    function settleShort() external {
+        _updateGlobalIndex();
+
+        if (block.timestamp < MATURITY) revert MarketNotExpired();
+
+        Vault storage vault = vaults[msg.sender];
+
+        // Calculate Final Debt (money owed to Long YT holders,
+        // stored in the contract for future claim by long YT holders
+        uint256 debt = (vault.mintedAmount * (globalIndex - INITIAL_INDEX)) / 1e18;
+
+        uint256 remainingCollateral = 0;
+        if (vault.collateral > debt) {
+            remainingCollateral = vault.collateral - debt;
+        }
+        // The `debt` amount stays in the contract to fund `redeemYield`.
+
+        // Clear Vault state
+        vault.collateral = 0;
+        vault.mintedAmount = 0;
+
+        if (remainingCollateral > 0) {
+            UNDERLYING_TOKEN.safeTransfer(msg.sender, remainingCollateral);
+        }
+    }
 
     /////////////////////////////////////////////////////////////////////////////////////
     //                         EXTERNAL ADMIN FUNCTIONS                                //
