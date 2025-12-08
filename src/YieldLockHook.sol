@@ -202,26 +202,27 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
     //                        EXTERNAL PUBLIC FUNCTIONS                                //
     /////////////////////////////////////////////////////////////////////////////////////
 
-    // Liquidity is added to the contract in a single token (Underlying) and the hook calculates
-    // the amount of YieldToken to mint based on the current reserve ratio.
-    // YieldTokens are minted to the Hook contract to maintain reserves
-    function addLiquidity(PoolKey calldata key, uint256 amountUnderlying) external returns (uint256 shares) {
+    function addLiquidity(
+        PoolKey calldata key, 
+        uint256 amountUnderlying, 
+        uint256 amountYield
+    ) external returns (uint256 shares) {
         PoolId id = key.toId();
         MarketState storage state = marketStates[id];
 
         if (state.maturity == 0 || state.totalLpSupply == 0) revert MarketNotInitialized();
         if (block.timestamp >= state.maturity) revert MarketExpired();
+        if (amountUnderlying == 0 || amountYield == 0) revert InvalidAmount();
 
-        // Calculate required Yield to match current ratio
-        uint256 amountYield = (amountUnderlying * state.reserveYield) / state.reserveUnderlying;
+        // Calculate shares based on the ratio (Uniswap V2 Logic)
+        uint256 shareU = (amountUnderlying * state.totalLpSupply) / state.reserveUnderlying;
+        uint256 shareY = (amountYield * state.totalLpSupply) / state.reserveYield;
+        shares = shareU < shareY ? shareU : shareY;
 
-        // Calculate Shares (LP tokens)
-        shares = (amountUnderlying * state.totalLpSupply) / state.reserveUnderlying;
+        if (shares == 0) revert InvalidAmount();
 
         IERC20(state.underlyingToken).safeTransferFrom(msg.sender, address(this), amountUnderlying);
-
-        // Mint Yield to Hook (Reserve), acts as virtual tokens for accounting
-        YieldToken(state.yieldToken).mint(address(this), amountYield);
+        IERC20(state.yieldToken).safeTransferFrom(msg.sender, address(this), amountYield);
 
         // Update state
         state.reserveUnderlying += amountUnderlying.toUint128();
@@ -254,11 +255,9 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         state.reserveYield -= amountYield.toUint128();
         state.totalLpSupply -= shares.toUint128();
 
-        // Transfer Underlying to user
+        // Transfer Tokens Out
         IERC20(state.underlyingToken).safeTransfer(msg.sender, amountUnderlying);
-
-        // Burn YieldTokens from the Hook (virtual tokens removed from circulation)
-        YieldToken(state.yieldToken).burn(address(this), amountYield);
+        IERC20(state.yieldToken).safeTransfer(msg.sender, amountYield);
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
@@ -270,7 +269,7 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
 
         if (address(key.hooks) != address(this)) revert("Invalid Hook Address");
 
-        address underlying = YieldToken(yieldToken).UNDERLYING_TOKEN();
+        address underlying = address(YieldToken(yieldToken).UNDERLYING_TOKEN());
         address token0 = Currency.unwrap(key.currency0);
         address token1 = Currency.unwrap(key.currency1);
 
@@ -287,24 +286,30 @@ contract YieldLockHook is BaseHook, Ownable, ERC6909 {
         PoolKey calldata key,
         uint256 amountUnderlying,
         uint256 amountYield
-    ) external onlyOwner {
+    ) external onlyOwner returns (uint256 shares) {
         PoolId id = key.toId();
         MarketState storage state = marketStates[id];
 
-        if (state.maturity == 0) revert MarketNotInitialized(); // Must be initialized via V4 first
+        if (state.maturity == 0) revert MarketNotInitialized();
         if (state.totalLpSupply > 0) revert MarketAlreadySeeded();
+        if (block.timestamp >= state.maturity) revert MarketExpired();
         if (amountUnderlying == 0 || amountYield == 0) revert InvalidAmount();
 
+        // Initial Liquidity Calculation (Geometric Mean)
+        shares = FixedPointMathLib.sqrt(amountUnderlying * amountYield);
+        if (shares == 0) revert InvalidAmount();
+
+        // Transfer Tokens In
         IERC20(state.underlyingToken).safeTransferFrom(msg.sender, address(this), amountUnderlying);
+        IERC20(state.yieldToken).safeTransferFrom(msg.sender, address(this), amountYield);
 
-        // Mint YieldToken to the Hook (hook maintains all the reserve amounts and calcualtions)
-        YieldToken(state.yieldToken).mint(address(this), amountYield);
+        // Update state
+        state.reserveUnderlying += amountUnderlying.toUint128();
+        state.reserveYield += amountYield.toUint128();
+        state.totalLpSupply += shares.toUint128();
 
-        state.reserveUnderlying = amountUnderlying.toUint128();
-        state.reserveYield = amountYield.toUint128();
-        state.totalLpSupply = amountUnderlying.toUint128(); // Initial shares = Underlying amount
-
-        _mint(msg.sender, uint256(PoolId.unwrap(id)), amountUnderlying);
+        // Mint LP Tokens
+        _mint(msg.sender, uint256(PoolId.unwrap(id)), shares);
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
