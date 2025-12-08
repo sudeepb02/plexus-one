@@ -2,11 +2,15 @@
 pragma solidity 0.8.26;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 import {IYieldOracle} from "./interfaces/IYieldOracle.sol";
 
 contract YieldToken is ERC20, Ownable {
+    using SafeERC20 for IERC20;
+
     address public hook;
     IYieldOracle public oracle;
 
@@ -18,10 +22,23 @@ contract YieldToken is ERC20, Ownable {
     uint256 public globalIndex; // The cumulative yield index
     uint256 public lastUpdated; // Timestamp of last index update
 
+    // Vaults (Short Positions with deposited collateral)
+    struct Vault {
+        uint256 collateral; // Amount of Underlying Token locked
+        uint256 mintedAmount; // Amount of Yield Token minted (Notional)
+    }
+
+    mapping(address => Vault) public vaults;
+
     // Constants and Configs
     uint256 public constant INITIAL_INDEX = 1e18;
+    // Minimum collateral required per unit of YT minted
+    // (for ex, 0.1e18 = 10% of Notional ie. 0.1 ETH required to mint 1 YT ETH)
+    // This acts as the  collateral (maintenance margin) for the future yield liability to long YT holders
+    uint256 public constant MIN_COLLATERAL_RATIO = 0.1e18;
 
-    error TransferNotAllowed();
+    error MarketExpired();
+    error InvalidAmount();
     error HookAlreadySet();
     error OnlyHook();
 
@@ -49,17 +66,53 @@ contract YieldToken is ERC20, Ownable {
     //                        EXTERNAL PUBLIC FUNCTIONS                                //
     /////////////////////////////////////////////////////////////////////////////////////
 
-    function mint(address to, uint256 amount) external onlyHook {
-        _mint(to, amount);
-    }
-
-    function burn(address from, uint256 amount) external onlyHook {
-        _burn(from, amount);
-    }
-
     function updateGlobalIndex() external {
         _updateGlobalIndex();
     }
+
+    ////////////////////// SHORT POSITIONS (ISSUANCE OF YT) /////////////////////////////
+
+    function mintSynthetic(uint256 amountCollateral, uint256 amountYt) external {
+        _updateGlobalIndex();
+
+        if (block.timestamp >= MATURITY) revert MarketExpired();
+
+        Vault storage vault = vaults[msg.sender];
+
+        // 1. Transfer Collateral to the contract
+        if (amountCollateral > 0) {
+            IERC20(UNDERLYING_TOKEN).safeTransferFrom(msg.sender, address(this), amountCollateral);
+            vault.collateral += amountCollateral;
+        }
+
+        // 2. Mint YT (Increase Notional supply by creating a debt position)
+        if (amountYt > 0) {
+            vault.mintedAmount += amountYt;
+            _mint(msg.sender, amountYt);
+        }
+    }
+
+    function burnSynthetic(uint256 amountYt, uint256 amountCollateral) external {
+        _updateGlobalIndex();
+
+        Vault storage vault = vaults[msg.sender];
+
+        // 1. Burn YT (Decrease Notional supply/ repay Debt)
+        if (amountYt > 0) {
+            if (vault.mintedAmount < amountYt) revert InvalidAmount();
+            vault.mintedAmount -= amountYt;
+            _burn(msg.sender, amountYt);
+        }
+
+        // 2. Withdraw Collateral
+        if (amountCollateral > 0) {
+            if (vault.collateral < amountCollateral) revert InvalidAmount();
+            vault.collateral -= amountCollateral;
+            IERC20(UNDERLYING_TOKEN).safeTransfer(msg.sender, amountCollateral);
+        }
+    }
+
+    ////////////////////// LONG POSITIONS (YIELD REDEMPTION) ////////////////////////////
 
     /////////////////////////////////////////////////////////////////////////////////////
     //                         EXTERNAL ADMIN FUNCTIONS                                //
