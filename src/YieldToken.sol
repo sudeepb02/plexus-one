@@ -37,8 +37,8 @@ contract YieldToken is ERC20, Ownable {
     // This acts as the  collateral (maintenance margin) for the future yield liability to long YT holders
     uint256 public constant MIN_COLLATERAL_RATIO = 0.1e18;
 
-    // Penalty paid to liquidators (5%)
-    uint256 public constant LIQUIDATION_PENALTY = 0.05e18;
+    // Liquidation rewards received by liquidators (5%)
+    uint256 public constant LIQUIDATION_REWARD = 0.05e18;
 
     error MarketExpired();
     error MarketNotExpired();
@@ -189,14 +189,14 @@ contract YieldToken is ERC20, Ownable {
         // Debt Value = Accrued Yield (Intrinsic Value)
         uint256 accruedValue = _calculateAccruedYield(amountYt);
 
-        // Liquidator Reward = Debt Value + Penalty
-        // The penalty is calculated on the accrued value, not the notional (YT balance).
-        uint256 reward = accruedValue + (accruedValue * LIQUIDATION_PENALTY) / 1e18;
+        // Liquidation Amount = Debt Value + liquidation reward
+        // The reward is calculated on the accrued value, not the notional (YT balance).
+        uint256 liqAmount = accruedValue + (accruedValue * LIQUIDATION_REWARD) / 1e18;
 
         // The contract should not pay more than the users total available collateral
         // else it will become insolvent for the users that withdraw last.
-        if (reward > vault.collateral) {
-            reward = vault.collateral;
+        if (liqAmount > vault.collateral) {
+            liqAmount = vault.collateral;
         }
 
         // 1. Burn Liquidator's YT (Repay Debt)
@@ -205,8 +205,8 @@ contract YieldToken is ERC20, Ownable {
         _burn(msg.sender, amountYt);
 
         // 2. Seize Collateral
-        vault.collateral -= reward;
-        UNDERLYING_TOKEN.safeTransfer(msg.sender, reward);
+        vault.collateral -= liqAmount;
+        UNDERLYING_TOKEN.safeTransfer(msg.sender, liqAmount);
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
