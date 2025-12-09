@@ -19,8 +19,8 @@ The Yield Token represents a **claim on the total yield** (accrued + future) of 
 - **Redemption**: Holders can burn YT to redeem the **Accrued Yield** (Intrinsic Value).
 - **No Streaming**: Yield is not streamed. It is embedded in the token. To realize the yield, one must sell or redeem the token.
 
-### 2. YieldLockHook (The AMM)
-The core of the protocol is a Uniswap V4 Hook (`YieldLockHook.sol`) that implements a custom pricing curve. It acts as the primary market maker for YT.
+### 2. PlexusYieldHook (The AMM)
+The core of the protocol is a Uniswap V4 Hook (`PlexusYieldHook.sol`) that implements a custom pricing curve. It acts as the primary market maker for YT.
 - **Liquidity**: LPs provide Underlying Tokens
 - **Mechanism**: Prices YT based on reserves and time to maturity.
 
@@ -97,7 +97,7 @@ The system uses a **Redemption on Burn** model.
 
 ## Architecture
 
-- **`src/YieldLockHook.sol`**: The Uniswap V4 Hook managing the pool state, swaps, and liquidity. Implements **Hybrid Pricing**.
+- **`src/PlexusYieldHook.sol`**: The Uniswap V4 Hook managing the pool state, swaps, and liquidity. Implements **Hybrid Pricing**.
 - **`src/YieldToken.sol`**: The ERC20 token implementing the **accumulating yield** logic. It manages vaults (Shorts) and redemption (Longs).
 - **`src/lib/YieldMath.sol`**: Library implementing the power invariant math using fixed-point arithmetic.
 

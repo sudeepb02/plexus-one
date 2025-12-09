@@ -23,7 +23,7 @@ import {YieldMath} from "./lib/YieldMath.sol";
 
 import {YieldToken} from "./YieldToken.sol";
 
-contract YieldLockHook is BaseHook, Ownable, ERC6909 {
+contract PlexusYieldHook is BaseHook, Ownable, ERC6909 {
     using PoolIdLibrary for PoolKey;
     using SafeCast for int256;
     using SafeCast for uint256;
