@@ -168,6 +168,40 @@ contract YieldToken is ERC20, Ownable {
         }
     }
 
+    ////////////////////// LIQUIDATE POSITIONS (PUBLIC) ////////////////////////////
+
+    function liquidate(address user, uint256 amountYt) external {
+        _updateGlobalIndex();
+
+        if (_isSolvent(user)) revert UserIsSolvent();
+
+        Vault storage vault = vaults[user];
+        if (amountYt > vault.mintedAmount) amountYt = vault.mintedAmount;
+
+        // Calculate the value of the debt being repaid
+        // Debt Value = Accrued Yield (Intrinsic Value)
+        uint256 accruedValue = _calculateAccruedYield(amountYt);
+
+        // Liquidator Reward = Debt Value + Penalty
+        // The penalty is calculated on the accrued value, not the notional (YT balance).
+        uint256 reward = accruedValue + (accruedValue * LIQUIDATION_PENALTY) / 1e18;
+
+        // The contract should not pay more than the users total available collateral
+        // else it will become insolvent for the users that withdraw last.
+        if (reward > vault.collateral) {
+            reward = vault.collateral;
+        }
+
+        // 1. Burn Liquidator's YT (Repay Debt)
+        // Instead of transferring YT from liquidator, we burn directly from liquidator's balance
+        vault.mintedAmount -= amountYt;
+        _burn(msg.sender, amountYt);
+
+        // 2. Seize Collateral
+        vault.collateral -= reward;
+        UNDERLYING_TOKEN.safeTransfer(msg.sender, reward);
+    }
+
     /////////////////////////////////////////////////////////////////////////////////////
     //                         EXTERNAL ADMIN FUNCTIONS                                //
     /////////////////////////////////////////////////////////////////////////////////////
