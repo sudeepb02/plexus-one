@@ -14,6 +14,7 @@ contract YieldToken is ERC20, Ownable {
     address public hook;
     IYieldOracle public oracle;
 
+    uint8 public immutable DECIMALS;
     IERC20 public immutable UNDERLYING_TOKEN;
     uint256 public immutable MATURITY;
 
@@ -56,6 +57,8 @@ contract YieldToken is ERC20, Ownable {
         UNDERLYING_TOKEN = IERC20(_underlying);
         MATURITY = _maturity;
 
+        DECIMALS = ERC20(_underlying).decimals();
+
         globalIndex = INITIAL_INDEX;
         lastUpdated = block.timestamp;
     }
@@ -68,6 +71,10 @@ contract YieldToken is ERC20, Ownable {
     /////////////////////////////////////////////////////////////////////////////////////
     //                        EXTERNAL PUBLIC FUNCTIONS                                //
     /////////////////////////////////////////////////////////////////////////////////////
+
+    function decimals() public view override returns (uint8) {
+        return DECIMALS;
+    }
 
     function updateGlobalIndex() external {
         _updateGlobalIndex();
