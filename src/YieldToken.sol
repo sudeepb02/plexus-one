@@ -36,11 +36,16 @@ contract YieldToken is ERC20, Ownable {
     // This acts as the  collateral (maintenance margin) for the future yield liability to long YT holders
     uint256 public constant MIN_COLLATERAL_RATIO = 0.1e18;
 
+    // Penalty paid to liquidators (5%)
+    uint256 public constant LIQUIDATION_PENALTY = 0.05e18;
+
     error MarketExpired();
     error MarketNotExpired();
     error InvalidAmount();
     error HookAlreadySet();
     error OnlyHook();
+    error SolvencyCheckFailed();
+    error UserIsSolvent();
 
     constructor(
         string memory name,
@@ -72,6 +77,10 @@ contract YieldToken is ERC20, Ownable {
         return _calculateAccruedYield(amountYt);
     }
 
+    function isSolvent(address user) external view returns (bool) {
+        return _isSolvent(user);
+    }
+
     ////////////////////// SHORT POSITIONS (ISSUANCE OF YT) /////////////////////////////
 
     function mintSynthetic(uint256 amountCollateral, uint256 amountYt) external {
@@ -92,6 +101,8 @@ contract YieldToken is ERC20, Ownable {
             vault.mintedAmount += amountYt;
             _mint(msg.sender, amountYt);
         }
+
+        if (!_isSolvent(msg.sender)) revert SolvencyCheckFailed();
     }
 
     function burnSynthetic(uint256 amountYt, uint256 amountCollateral) external {
@@ -112,6 +123,8 @@ contract YieldToken is ERC20, Ownable {
             vault.collateral -= amountCollateral;
             UNDERLYING_TOKEN.safeTransfer(msg.sender, amountCollateral);
         }
+
+        if (vault.mintedAmount > 0 && !_isSolvent(msg.sender)) revert SolvencyCheckFailed();
     }
 
     ////////////////////// LONG POSITIONS (YIELD REDEMPTION) ////////////////////////////
@@ -202,5 +215,19 @@ contract YieldToken is ERC20, Ownable {
         }
 
         lastUpdated = currentTime;
+    }
+
+    function _isSolvent(address user) internal view returns (bool) {
+        Vault storage vault = vaults[user];
+        if (vault.mintedAmount == 0) return true;
+
+        // Liability = Accrued Debt + Maintenance Margin
+        uint256 accruedDebt = _calculateAccruedYield(vault.mintedAmount);
+
+        // Maintenance Margin = Minted * Ratio
+        // This ensures there is always a buffer for future yield growth
+        uint256 margin = (vault.mintedAmount * MIN_COLLATERAL_RATIO) / 1e18;
+
+        return vault.collateral >= (accruedDebt + margin);
     }
 }
