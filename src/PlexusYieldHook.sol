@@ -241,7 +241,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
     ) external returns (uint256 shares) {
         // Unlock the pool manager manually for adding liquidity to the PM
         // and mint ERC6909 Claim tokens to the hook
-        poolManager.unlock(
+        bytes memory retData = poolManager.unlock(
             abi.encode(
                 PMCallbackData({
                     actionType: 0,
@@ -253,6 +253,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
                 })
             )
         );
+        shares = abi.decode(retData, (uint256));
     }
 
     function removeLiquidity(
@@ -261,7 +262,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
     ) external returns (uint256 amountUnderlying, uint256 amountYield) {
         // Unlock the pool manager manually for removing liquidity from the PM
         // and burn ERC6909 Claim tokens to remove the liquidity
-        poolManager.unlock(
+        bytes memory retData = poolManager.unlock(
             abi.encode(
                 PMCallbackData({
                     actionType: 1,
@@ -273,6 +274,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
                 })
             )
         );
+        (amountUnderlying, amountYield) = abi.decode(retData, (uint256, uint256));
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
