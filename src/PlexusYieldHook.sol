@@ -25,6 +25,8 @@ import {YieldMath} from "./lib/YieldMath.sol";
 
 import {YieldToken} from "./YieldToken.sol";
 
+import {console} from "forge-std/console.sol";
+
 contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
     using PoolIdLibrary for PoolKey;
     using SafeCast for int256;
@@ -445,7 +447,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         amountYield = (shares * state.reserveYield) / state.totalLpSupply;
 
         // Burn LP tokens (ERC6909)
-        _burn(msg.sender, uint256(PoolId.unwrap(id)), shares);
+        _burn(sender, uint256(PoolId.unwrap(id)), shares);
 
         // Update state
         state.reserveUnderlying -= amountUnderlying.toUint128();
