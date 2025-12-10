@@ -50,6 +50,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
     error MarketAlreadySeeded();
     error AddLiquidityThroughHook();
     error RemoveLiquidityThroughHook();
+    error OnlyOwnerCanInitializeLiquidity();
 
     struct MarketState {
         uint128 reserveUnderlying;
@@ -283,16 +284,27 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         MarketState storage state = marketStates[id];
 
         // Validations
-        if (state.maturity == 0 || state.totalLpSupply == 0) revert MarketNotInitialized();
+        if (state.maturity == 0) revert MarketNotInitialized();
+        if (state.totalLpSupply == 0 && sender != owner()) revert OnlyOwnerCanInitializeLiquidity();
+
         if (block.timestamp >= state.maturity) revert MarketExpired();
         if (amountUnderlying == 0 || amountYield == 0) revert InvalidAmount();
 
-        // Calculate shares based on the ratio
-        uint256 shareU = (amountUnderlying * state.totalLpSupply) / state.reserveUnderlying;
-        uint256 shareY = (amountYield * state.totalLpSupply) / state.reserveYield;
-        shares = shareU < shareY ? shareU : shareY;
+        if (state.totalLpSupply == 0) {
+            shares = FixedPointMathLib.sqrt(amountUnderlying * amountYield);
+        } else {
+            // Calculate shares based on the ratio
+            uint256 shareU = (amountUnderlying * state.totalLpSupply) / state.reserveUnderlying;
+            uint256 shareY = (amountYield * state.totalLpSupply) / state.reserveYield;
+            shares = shareU < shareY ? shareU : shareY;
+        }
 
         if (shares == 0) revert InvalidAmount();
+
+        // Update state
+        state.reserveUnderlying += amountUnderlying.toUint128();
+        state.reserveYield += amountYield.toUint128();
+        state.totalLpSupply += shares.toUint128();
 
         uint256 amount0;
         uint256 amount1;
@@ -322,11 +334,6 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         // true = mint claim tokens for the hook, equivalent to money we just deposited to the PM
         key.currency0.take(poolManager, address(this), amount0, true);
         key.currency1.take(poolManager, address(this), amount1, true);
-
-        // Update state
-        state.reserveUnderlying += amountUnderlying.toUint128();
-        state.reserveYield += amountYield.toUint128();
-        state.totalLpSupply += shares.toUint128();
 
         // Mint LP tokens (ERC6909)
         _mint(sender, uint256(PoolId.unwrap(id)), shares);
@@ -376,7 +383,6 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         // We can take actual tokens from the PM to balance out that credit
         key.currency0.take(poolManager, address(this), amount0, false);
         key.currency1.take(poolManager, address(this), amount1, false);
-
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
@@ -451,29 +457,20 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         uint256 amountUnderlying,
         uint256 amountYield
     ) external onlyOwner returns (uint256 shares) {
-        PoolId id = key.toId();
-        MarketState storage state = marketStates[id];
-
-        if (state.maturity == 0) revert MarketNotInitialized();
-        if (state.totalLpSupply > 0) revert MarketAlreadySeeded();
-        if (block.timestamp >= state.maturity) revert MarketExpired();
-        if (amountUnderlying == 0 || amountYield == 0) revert InvalidAmount();
-
-        // Initial Liquidity Calculation (Geometric Mean)
-        shares = FixedPointMathLib.sqrt(amountUnderlying * amountYield);
-        if (shares == 0) revert InvalidAmount();
-
-        // Transfer Tokens In
-        IERC20(state.underlyingToken).safeTransferFrom(msg.sender, address(this), amountUnderlying);
-        IERC20(state.yieldToken).safeTransferFrom(msg.sender, address(this), amountYield);
-
-        // Update state
-        state.reserveUnderlying += amountUnderlying.toUint128();
-        state.reserveYield += amountYield.toUint128();
-        state.totalLpSupply += shares.toUint128();
-
-        // Mint LP Tokens
-        _mint(msg.sender, uint256(PoolId.unwrap(id)), shares);
+        // Unlock the pool manager manually for adding liquidity to the PM
+        // and mint ERC6909 Claim tokens to the hook
+        poolManager.unlock(
+            abi.encode(
+                PMCallbackData({
+                    actionType: 0,
+                    sender: msg.sender,
+                    amountUnderlying: amountUnderlying,
+                    amountYield: amountYield,
+                    shares: 0,
+                    key: key
+                })
+            )
+        );
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
