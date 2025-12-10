@@ -221,10 +221,13 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
             return abi.encode(shares);
         } else if (callbackData.actionType == 1) {
             // Remove Liquidity
-            _removeLiquidityThroughHook(callbackData.key, callbackData.sender, callbackData.shares);
+            (uint256 amountUnderlying, uint256 amountYield) = _removeLiquidityThroughHook(
+                callbackData.key,
+                callbackData.sender,
+                callbackData.shares
+            );
+            return abi.encode(amountUnderlying, amountYield);
         }
-
-        return "";
     }
 
     function _addLiquidityThroughHook(
