@@ -206,6 +206,6 @@ contract PlexusYieldHookSetup is Test, Deployers {
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
         // 3. Seed initial liquidity via hook (owner only)
-        hook.initializeLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
+        hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
     }
 }

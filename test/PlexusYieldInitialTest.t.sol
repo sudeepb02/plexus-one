@@ -114,7 +114,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         uint256 ytBefore = yieldToken.balanceOf(address(this));
 
         // Initialize liquidity
-        hook.initializeLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
+        hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
 
         // Verify tokens were transferred
         assertEq(underlying.balanceOf(address(this)), underlyingBefore - INITIAL_LIQUIDITY_UNDERLYING);
@@ -127,7 +127,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
         // Initialize liquidity
-        hook.initializeLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
+        hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
 
         // Verify reserves are set correctly
         (uint128 reserveUnderlying, uint128 reserveYield, , , , , ) = hook.marketStates(poolId);
@@ -142,7 +142,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
         // Initialize liquidity
-        hook.initializeLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
+        hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
 
         // Verify LP tokens minted
         (, , uint128 totalLpSupply, , , , ) = hook.marketStates(poolId);
@@ -164,23 +164,28 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         // Try to initialize liquidity as non-owner
         vm.prank(alice);
         vm.expectRevert();
-        hook.initializeLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
+        hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
     }
 
     function testRevert_InitializeLiquidity_PoolNotRegistered() public {
         // Don't register the pool, just try to initialize liquidity
         // This should fail because the market state doesn't exist
         vm.expectRevert();
-        hook.initializeLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
+        hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
     }
 
-    function testRevert_InitializeLiquidity_AlreadyInitialized() public {
+    function test_InitializeLiquidity_AlreadyInitialized() public {
         // Full initialization
         _initializePoolWithLiquidity();
 
-        // Try to initialize liquidity again
-        vm.expectRevert(PlexusYieldHook.MarketAlreadySeeded.selector);
-        hook.initializeLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
+        uint256 lpBalanceBefore = hook.balanceOf(address(this), uint256(PoolId.unwrap(poolId)));
+
+        // Initializing liquidity again
+        hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
+
+        uint256 lpBalanceAfter = hook.balanceOf(address(this), uint256(PoolId.unwrap(poolId)));
+
+        assertGt(lpBalanceAfter, lpBalanceBefore);
     }
 
     function testRevert_InitializeLiquidity_ZeroUnderlying() public {
@@ -190,7 +195,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
 
         // Try to initialize with zero underlying
         vm.expectRevert(PlexusYieldHook.InvalidAmount.selector);
-        hook.initializeLiquidity(poolKey, 0, INITIAL_LIQUIDITY_YT);
+        hook.addLiquidity(poolKey, 0, INITIAL_LIQUIDITY_YT);
     }
 
     function testRevert_InitializeLiquidity_ZeroYieldToken() public {
@@ -200,7 +205,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
 
         // Try to initialize with zero yield token
         vm.expectRevert(PlexusYieldHook.InvalidAmount.selector);
-        hook.initializeLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, 0);
+        hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, 0);
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
@@ -219,7 +224,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         uint256 underlyingAmount = 5_000 * 1e6; // 5k USDC
         uint256 ytAmount = 100_000 * 1e6; // 100k YT
 
-        hook.initializeLiquidity(poolKey, underlyingAmount, ytAmount);
+        hook.addLiquidity(poolKey, underlyingAmount, ytAmount);
 
         // Verify reserves
         (uint128 reserveUnderlying, uint128 reserveYield, , , , , ) = hook.marketStates(poolId);
@@ -243,7 +248,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         uint256 underlyingAmount = 5_000 * 1e6;
         uint256 ytAmount = 100_000 * 1e6;
 
-        hook.initializeLiquidity(poolKey, underlyingAmount, ytAmount);
+        hook.addLiquidity(poolKey, underlyingAmount, ytAmount);
 
         // Get market state
         (uint128 reserveUnderlying, uint128 reserveYield, , uint48 startTime, uint48 maturityTime, , ) = hook
@@ -273,7 +278,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         // Setup for 1% APR pool
         hook.registerPool(poolKey, address(yieldToken));
         manager.initialize(poolKey, SQRT_PRICE_1_1);
-        hook.initializeLiquidity(poolKey, 1_000 * 1e6, 100_000 * 1e6);
+        hook.addLiquidity(poolKey, 1_000 * 1e6, 100_000 * 1e6);
 
         (uint128 reserve1Pct_Und, uint128 reserve1Pct_YT, , , , , ) = hook.marketStates(poolId);
         uint256 impliedRate1Pct = (uint256(reserve1Pct_Und) * 1e18) / uint256(reserve1Pct_YT);
@@ -299,7 +304,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         uint256 managerYtBefore = yieldToken.balanceOf(address(manager));
 
         // Initialize liquidity
-        hook.initializeLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
+        hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
 
         // Verify tokens are in the hook
         assertEq(underlying.balanceOf(address(hook)), managerUnderlyingBefore + INITIAL_LIQUIDITY_UNDERLYING);
