@@ -254,7 +254,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
     }
 
     // Called by the PoolManager upon unlocking during the addLiquidity/removeLiquidity function calls
-    function unlockCallback(bytes calldata data) external override returns (bytes memory) {
+    function unlockCallback(bytes calldata data) external override onlyPoolManager returns (bytes memory) {
         PMCallbackData memory callbackData = abi.decode(data, (PMCallbackData));
 
         if (callbackData.actionType == 0) {
@@ -357,7 +357,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
 
         uint256 amount0;
         uint256 amount1;
-        
+
         if (Currency.unwrap(key.currency0) == state.underlyingToken) {
             // Currency0 is Underlying, Currency1 is YieldToken
             amount0 = amountUnderlying;
