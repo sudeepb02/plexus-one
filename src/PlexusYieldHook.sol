@@ -251,38 +251,21 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         return (BaseHook.beforeSwap.selector, delta, 0);
     }
 
+    // Called by the PoolManager upon unlocking during the addLiquidity/removeLiquidity function calls
     function unlockCallback(bytes calldata data) external override returns (bytes memory) {
         PMCallbackData memory callbackData = abi.decode(data, (PMCallbackData));
 
-        // @todo
+        if (callbackData.actionType == 0) {
+            _addLiquidityThroughHook(callbackData.key, callbackData.amountUnderlying, callbackData.amountYield);
+        } else if (callbackData.actionType == 1) {
+            // Remove Liquidity
+            _removeLiquidityThroughHook(callbackData.key, callbackData.shares);
+        }
 
         return "";
     }
 
-    /////////////////////////////////////////////////////////////////////////////////////
-    //                        EXTERNAL PUBLIC FUNCTIONS                                //
-    /////////////////////////////////////////////////////////////////////////////////////
-
-    function addLiquidity(
-        PoolKey calldata key,
-        uint256 amountUnderlying,
-        uint256 amountYield
-    ) external returns (uint256 shares) {
-        // Unlock the pool manager manually for adding liquidity to the PM
-        // and mint ERC6909 Claim tokens to the hook
-        poolManager.unlock(
-            abi.encode(
-                PMCallbackData({
-                    actionType: 0,
-                    sender: msg.sender,
-                    amountUnderlying: amountUnderlying,
-                    amountYield: amountYield,
-                    shares: 0,
-                    key: key
-                })
-            )
-        );
-
+    function _addLiquidityThroughHook(PoolKey memory key, uint256 amountUnderlying, uint256 amountYield) internal returns (uint256 shares) {
         PoolId id = key.toId();
         MarketState storage state = marketStates[id];
 
@@ -309,10 +292,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         _mint(msg.sender, uint256(PoolId.unwrap(id)), shares);
     }
 
-    function removeLiquidity(
-        PoolKey calldata key,
-        uint256 shares
-    ) external returns (uint256 amountUnderlying, uint256 amountYield) {
+    function _removeLiquidityThroughHook(PoolKey memory key, uint256 shares) internal returns (uint256 amountUnderlying, uint256 amountYield) {
         PoolId id = key.toId();
         MarketState storage state = marketStates[id];
 
@@ -334,6 +314,51 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         // Transfer Tokens Out
         IERC20(state.underlyingToken).safeTransfer(msg.sender, amountUnderlying);
         IERC20(state.yieldToken).safeTransfer(msg.sender, amountYield);
+    }
+
+    /////////////////////////////////////////////////////////////////////////////////////
+    //                        EXTERNAL PUBLIC FUNCTIONS                                //
+    /////////////////////////////////////////////////////////////////////////////////////
+
+    function addLiquidity(
+        PoolKey calldata key,
+        uint256 amountUnderlying,
+        uint256 amountYield
+    ) external returns (uint256 shares) {
+        // Unlock the pool manager manually for adding liquidity to the PM
+        // and mint ERC6909 Claim tokens to the hook
+        poolManager.unlock(
+            abi.encode(
+                PMCallbackData({
+                    actionType: 0,
+                    sender: msg.sender,
+                    amountUnderlying: amountUnderlying,
+                    amountYield: amountYield,
+                    shares: 0,
+                    key: key
+                })
+            )
+        );
+    }
+
+    function removeLiquidity(
+        PoolKey calldata key,
+        uint256 shares
+    ) external returns (uint256 amountUnderlying, uint256 amountYield) {
+        // Unlock the pool manager manually for removing liquidity from the PM
+        // and burn ERC6909 Claim tokens to remove the liquidity
+        poolManager.unlock(
+            abi.encode(
+                PMCallbackData({
+                    actionType: 1,
+                    sender: msg.sender,
+                    amountUnderlying: 0,
+                    amountYield: 0,
+                    shares: shares,
+                    key: key
+                })
+            )
+        );
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
