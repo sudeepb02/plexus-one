@@ -12,6 +12,7 @@ import {IPoolManager, ModifyLiquidityParams} from "v4-core/interfaces/IPoolManag
 import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
 import {IUnlockCallback} from "v4-core/interfaces/callback/IUnlockCallback.sol";
+import {CurrencySettler} from "v4-core-test/utils/CurrencySettler.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -32,6 +33,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
     using SafeCast for uint256;
     using BeforeSwapDeltaLibrary for BeforeSwapDelta;
     using CurrencyLibrary for Currency;
+    using CurrencySettler for Currency;
 
     using SafeERC20 for IERC20;
     using FixedPointMathLib for uint256;
@@ -256,7 +258,13 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         PMCallbackData memory callbackData = abi.decode(data, (PMCallbackData));
 
         if (callbackData.actionType == 0) {
-            _addLiquidityThroughHook(callbackData.key, callbackData.amountUnderlying, callbackData.amountYield);
+            uint256 shares = _addLiquidityThroughHook(
+                callbackData.key,
+                callbackData.sender,
+                callbackData.amountUnderlying,
+                callbackData.amountYield
+            );
+            return abi.encode(shares);
         } else if (callbackData.actionType == 1) {
             // Remove Liquidity
             _removeLiquidityThroughHook(callbackData.key, callbackData.shares);
@@ -265,23 +273,55 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         return "";
     }
 
-    function _addLiquidityThroughHook(PoolKey memory key, uint256 amountUnderlying, uint256 amountYield) internal returns (uint256 shares) {
+    function _addLiquidityThroughHook(
+        PoolKey memory key,
+        address sender,
+        uint256 amountUnderlying,
+        uint256 amountYield
+    ) internal returns (uint256 shares) {
         PoolId id = key.toId();
         MarketState storage state = marketStates[id];
 
+        // Validations
         if (state.maturity == 0 || state.totalLpSupply == 0) revert MarketNotInitialized();
         if (block.timestamp >= state.maturity) revert MarketExpired();
         if (amountUnderlying == 0 || amountYield == 0) revert InvalidAmount();
 
-        // Calculate shares based on the ratio (Uniswap V2 Logic)
+        // Calculate shares based on the ratio
         uint256 shareU = (amountUnderlying * state.totalLpSupply) / state.reserveUnderlying;
         uint256 shareY = (amountYield * state.totalLpSupply) / state.reserveYield;
         shares = shareU < shareY ? shareU : shareY;
 
         if (shares == 0) revert InvalidAmount();
 
-        IERC20(state.underlyingToken).safeTransferFrom(msg.sender, address(this), amountUnderlying);
-        IERC20(state.yieldToken).safeTransferFrom(msg.sender, address(this), amountYield);
+        uint256 amount0;
+        uint256 amount1;
+
+        if (Currency.unwrap(key.currency0) == state.underlyingToken) {
+            // Currency0 is Underlying, Currency1 is YieldToken
+            amount0 = amountUnderlying;
+            amount1 = amountYield;
+        } else {
+            // Currency1 is Underlying, Currency0 is YieldToken
+            amount0 = amountYield;
+            amount1 = amountUnderlying;
+        }
+
+        // Create a debit of `amountEach` of each currency with the Pool Manager
+        // `burn` = `false` i.e. we're actually transferring tokens, not burning ERC-6909 Claim Tokens
+        key.currency0.settle(poolManager, sender, amount0, false);
+        key.currency1.settle(poolManager, sender, amount1, false);
+
+        // Since we didn't go through the regular "modify liquidity" flow,
+        // the PM just has a debit of amount0 and amount1 of the currency from us
+        // We can, in exchange, get back ERC-6909 claim tokens for each currency
+        // to create a credit of each currency to us that balances out the debit
+
+        // We will store those claim tokens with the hook, so when swaps take place
+        // liquidity from our hook can be used by minting/burning claim tokens the hook owns
+        // true = mint claim tokens for the hook, equivalent to money we just deposited to the PM
+        key.currency0.take(poolManager, address(this), amount0, true);
+        key.currency1.take(poolManager, address(this), amount1, true);
 
         // Update state
         state.reserveUnderlying += amountUnderlying.toUint128();
@@ -289,10 +329,13 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         state.totalLpSupply += shares.toUint128();
 
         // Mint LP tokens (ERC6909)
-        _mint(msg.sender, uint256(PoolId.unwrap(id)), shares);
+        _mint(sender, uint256(PoolId.unwrap(id)), shares);
     }
 
-    function _removeLiquidityThroughHook(PoolKey memory key, uint256 shares) internal returns (uint256 amountUnderlying, uint256 amountYield) {
+    function _removeLiquidityThroughHook(
+        PoolKey memory key,
+        uint256 shares
+    ) internal returns (uint256 amountUnderlying, uint256 amountYield) {
         PoolId id = key.toId();
         MarketState storage state = marketStates[id];
 
