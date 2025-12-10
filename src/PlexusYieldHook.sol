@@ -230,117 +230,6 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         }
     }
 
-    function _addLiquidityThroughHook(
-        PoolKey memory key,
-        address sender,
-        uint256 amountUnderlying,
-        uint256 amountYield
-    ) internal returns (uint256 shares) {
-        PoolId id = key.toId();
-        MarketState storage state = marketStates[id];
-
-        // Validations
-        if (state.maturity == 0) revert MarketNotInitialized();
-        if (state.totalLpSupply == 0 && sender != owner()) revert OnlyOwnerCanInitializeLiquidity();
-
-        if (block.timestamp >= state.maturity) revert MarketExpired();
-        if (amountUnderlying == 0 || amountYield == 0) revert InvalidAmount();
-
-        if (state.totalLpSupply == 0) {
-            shares = FixedPointMathLib.sqrt(amountUnderlying * amountYield);
-        } else {
-            // Calculate shares based on the ratio
-            uint256 shareU = (amountUnderlying * state.totalLpSupply) / state.reserveUnderlying;
-            uint256 shareY = (amountYield * state.totalLpSupply) / state.reserveYield;
-            shares = shareU < shareY ? shareU : shareY;
-        }
-
-        if (shares == 0) revert InvalidAmount();
-
-        // Update state
-        state.reserveUnderlying += amountUnderlying.toUint128();
-        state.reserveYield += amountYield.toUint128();
-        state.totalLpSupply += shares.toUint128();
-
-        uint256 amount0;
-        uint256 amount1;
-
-        if (Currency.unwrap(key.currency0) == state.underlyingToken) {
-            // Currency0 is Underlying, Currency1 is YieldToken
-            amount0 = amountUnderlying;
-            amount1 = amountYield;
-        } else {
-            // Currency1 is Underlying, Currency0 is YieldToken
-            amount0 = amountYield;
-            amount1 = amountUnderlying;
-        }
-
-        // Create a debit of `amountEach` of each currency with the Pool Manager
-        // `burn` = `false` i.e. we're actually transferring tokens, not burning ERC-6909 Claim Tokens
-        key.currency0.settle(poolManager, sender, amount0, false);
-        key.currency1.settle(poolManager, sender, amount1, false);
-
-        // Since we didn't go through the regular "modify liquidity" flow,
-        // the PM just has a debit of amount0 and amount1 of the currency from us
-        // We can, in exchange, get back ERC-6909 claim tokens for each currency
-        // to create a credit of each currency to us that balances out the debit
-
-        // We will store those claim tokens with the hook, so when swaps take place
-        // liquidity from our hook can be used by minting/burning claim tokens the hook owns
-        // true = mint claim tokens for the hook, equivalent to money we just deposited to the PM
-        key.currency0.take(poolManager, address(this), amount0, true);
-        key.currency1.take(poolManager, address(this), amount1, true);
-
-        // Mint LP tokens (ERC6909)
-        _mint(sender, uint256(PoolId.unwrap(id)), shares);
-    }
-
-    function _removeLiquidityThroughHook(
-        PoolKey memory key,
-        address sender,
-        uint256 shares
-    ) internal returns (uint256 amountUnderlying, uint256 amountYield) {
-        PoolId id = key.toId();
-        MarketState storage state = marketStates[id];
-
-        if (state.totalLpSupply == 0) revert MarketNotInitialized();
-        if (shares == 0) revert InvalidAmount();
-
-        // Calculate amounts for Underlying and YieldToken
-        amountUnderlying = (shares * state.reserveUnderlying) / state.totalLpSupply;
-        amountYield = (shares * state.reserveYield) / state.totalLpSupply;
-
-        // Burn LP tokens (ERC6909)
-        _burn(msg.sender, uint256(PoolId.unwrap(id)), shares);
-
-        // Update state
-        state.reserveUnderlying -= amountUnderlying.toUint128();
-        state.reserveYield -= amountYield.toUint128();
-        state.totalLpSupply -= shares.toUint128();
-
-        uint256 amount0;
-        uint256 amount1;
-
-        if (Currency.unwrap(key.currency0) == state.underlyingToken) {
-            // Currency0 is Underlying, Currency1 is YieldToken
-            amount0 = amountUnderlying;
-            amount1 = amountYield;
-        } else {
-            // Currency1 is Underlying, Currency0 is YieldToken
-            amount0 = amountYield;
-            amount1 = amountUnderlying;
-        }
-
-        // We need to pay the PM the erc6909 tokens we hold for the liquidity being removed
-        key.currency0.settle(poolManager, sender, amount0, true);
-        key.currency1.settle(poolManager, sender, amount1, true);
-
-        // Now, the PM has a credit of amount0 and amount1 of the currency to us
-        // We can take actual tokens from the PM to balance out that credit
-        key.currency0.take(poolManager, address(this), amount0, false);
-        key.currency1.take(poolManager, address(this), amount1, false);
-    }
-
     /////////////////////////////////////////////////////////////////////////////////////
     //                        EXTERNAL PUBLIC FUNCTIONS                                //
     /////////////////////////////////////////////////////////////////////////////////////
@@ -493,5 +382,116 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
             );
             amountOut = amount;
         }
+    }
+
+    function _addLiquidityThroughHook(
+        PoolKey memory key,
+        address sender,
+        uint256 amountUnderlying,
+        uint256 amountYield
+    ) internal returns (uint256 shares) {
+        PoolId id = key.toId();
+        MarketState storage state = marketStates[id];
+
+        // Validations
+        if (state.maturity == 0) revert MarketNotInitialized();
+        if (state.totalLpSupply == 0 && sender != owner()) revert OnlyOwnerCanInitializeLiquidity();
+
+        if (block.timestamp >= state.maturity) revert MarketExpired();
+        if (amountUnderlying == 0 || amountYield == 0) revert InvalidAmount();
+
+        if (state.totalLpSupply == 0) {
+            shares = FixedPointMathLib.sqrt(amountUnderlying * amountYield);
+        } else {
+            // Calculate shares based on the ratio
+            uint256 shareU = (amountUnderlying * state.totalLpSupply) / state.reserveUnderlying;
+            uint256 shareY = (amountYield * state.totalLpSupply) / state.reserveYield;
+            shares = shareU < shareY ? shareU : shareY;
+        }
+
+        if (shares == 0) revert InvalidAmount();
+
+        // Update state
+        state.reserveUnderlying += amountUnderlying.toUint128();
+        state.reserveYield += amountYield.toUint128();
+        state.totalLpSupply += shares.toUint128();
+
+        uint256 amount0;
+        uint256 amount1;
+
+        if (Currency.unwrap(key.currency0) == state.underlyingToken) {
+            // Currency0 is Underlying, Currency1 is YieldToken
+            amount0 = amountUnderlying;
+            amount1 = amountYield;
+        } else {
+            // Currency1 is Underlying, Currency0 is YieldToken
+            amount0 = amountYield;
+            amount1 = amountUnderlying;
+        }
+
+        // Create a debit of `amountEach` of each currency with the Pool Manager
+        // `burn` = `false` i.e. we're actually transferring tokens, not burning ERC-6909 Claim Tokens
+        key.currency0.settle(poolManager, sender, amount0, false);
+        key.currency1.settle(poolManager, sender, amount1, false);
+
+        // Since we didn't go through the regular "modify liquidity" flow,
+        // the PM just has a debit of amount0 and amount1 of the currency from us
+        // We can, in exchange, get back ERC-6909 claim tokens for each currency
+        // to create a credit of each currency to us that balances out the debit
+
+        // We will store those claim tokens with the hook, so when swaps take place
+        // liquidity from our hook can be used by minting/burning claim tokens the hook owns
+        // true = mint claim tokens for the hook, equivalent to money we just deposited to the PM
+        key.currency0.take(poolManager, address(this), amount0, true);
+        key.currency1.take(poolManager, address(this), amount1, true);
+
+        // Mint LP tokens (ERC6909)
+        _mint(sender, uint256(PoolId.unwrap(id)), shares);
+    }
+
+    function _removeLiquidityThroughHook(
+        PoolKey memory key,
+        address sender,
+        uint256 shares
+    ) internal returns (uint256 amountUnderlying, uint256 amountYield) {
+        PoolId id = key.toId();
+        MarketState storage state = marketStates[id];
+
+        if (state.totalLpSupply == 0) revert MarketNotInitialized();
+        if (shares == 0) revert InvalidAmount();
+
+        // Calculate amounts for Underlying and YieldToken
+        amountUnderlying = (shares * state.reserveUnderlying) / state.totalLpSupply;
+        amountYield = (shares * state.reserveYield) / state.totalLpSupply;
+
+        // Burn LP tokens (ERC6909)
+        _burn(msg.sender, uint256(PoolId.unwrap(id)), shares);
+
+        // Update state
+        state.reserveUnderlying -= amountUnderlying.toUint128();
+        state.reserveYield -= amountYield.toUint128();
+        state.totalLpSupply -= shares.toUint128();
+
+        uint256 amount0;
+        uint256 amount1;
+
+        if (Currency.unwrap(key.currency0) == state.underlyingToken) {
+            // Currency0 is Underlying, Currency1 is YieldToken
+            amount0 = amountUnderlying;
+            amount1 = amountYield;
+        } else {
+            // Currency1 is Underlying, Currency0 is YieldToken
+            amount0 = amountYield;
+            amount1 = amountUnderlying;
+        }
+
+        // We need to pay the PM the erc6909 tokens we hold for the liquidity being removed
+        key.currency0.settle(poolManager, sender, amount0, true);
+        key.currency1.settle(poolManager, sender, amount1, true);
+
+        // Now, the PM has a credit of amount0 and amount1 of the currency to us
+        // We can take actual tokens from the PM to balance out that credit
+        key.currency0.take(poolManager, address(this), amount0, false);
+        key.currency1.take(poolManager, address(this), amount1, false);
     }
 }
