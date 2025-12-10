@@ -267,7 +267,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
             return abi.encode(shares);
         } else if (callbackData.actionType == 1) {
             // Remove Liquidity
-            _removeLiquidityThroughHook(callbackData.key, callbackData.shares);
+            _removeLiquidityThroughHook(callbackData.key, callbackData.sender, callbackData.shares);
         }
 
         return "";
@@ -334,6 +334,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
 
     function _removeLiquidityThroughHook(
         PoolKey memory key,
+        address sender,
         uint256 shares
     ) internal returns (uint256 amountUnderlying, uint256 amountYield) {
         PoolId id = key.toId();
@@ -354,9 +355,28 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         state.reserveYield -= amountYield.toUint128();
         state.totalLpSupply -= shares.toUint128();
 
-        // Transfer Tokens Out
-        IERC20(state.underlyingToken).safeTransfer(msg.sender, amountUnderlying);
-        IERC20(state.yieldToken).safeTransfer(msg.sender, amountYield);
+        uint256 amount0;
+        uint256 amount1;
+        
+        if (Currency.unwrap(key.currency0) == state.underlyingToken) {
+            // Currency0 is Underlying, Currency1 is YieldToken
+            amount0 = amountUnderlying;
+            amount1 = amountYield;
+        } else {
+            // Currency1 is Underlying, Currency0 is YieldToken
+            amount0 = amountYield;
+            amount1 = amountUnderlying;
+        }
+
+        // We need to pay the PM the erc6909 tokens we hold for the liquidity being removed
+        key.currency0.settle(poolManager, sender, amount0, true);
+        key.currency1.settle(poolManager, sender, amount1, true);
+
+        // Now, the PM has a credit of amount0 and amount1 of the currency to us
+        // We can take actual tokens from the PM to balance out that credit
+        key.currency0.take(poolManager, address(this), amount0, false);
+        key.currency1.take(poolManager, address(this), amount1, false);
+
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
