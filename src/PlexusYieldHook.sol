@@ -296,28 +296,6 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         registeredYieldTokens[id] = yieldToken;
     }
 
-    // Seed initial liquidity to the market, which is used to determine the initial rate
-    function initializeLiquidity(
-        PoolKey calldata key,
-        uint256 amountUnderlying,
-        uint256 amountYield
-    ) external onlyOwner returns (uint256 shares) {
-        // Unlock the pool manager manually for adding liquidity to the PM
-        // and mint ERC6909 Claim tokens to the hook
-        poolManager.unlock(
-            abi.encode(
-                PMCallbackData({
-                    actionType: 0,
-                    sender: msg.sender,
-                    amountUnderlying: amountUnderlying,
-                    amountYield: amountYield,
-                    shares: 0,
-                    key: key
-                })
-            )
-        );
-    }
-
     /////////////////////////////////////////////////////////////////////////////////////
     //                         INTERNAL HELPER FUNCTIONS                               //
     /////////////////////////////////////////////////////////////////////////////////////
