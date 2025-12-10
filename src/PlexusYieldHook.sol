@@ -25,8 +25,6 @@ import {YieldMath} from "./lib/YieldMath.sol";
 
 import {YieldToken} from "./YieldToken.sol";
 
-import {console} from "forge-std/console.sol";
-
 contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
     using PoolIdLibrary for PoolKey;
     using SafeCast for int256;
@@ -160,15 +158,6 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
     ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
         MarketState storage state = marketStates[key.toId()];
 
-        console.log("=== _beforeSwap START ===");
-        console.log("block.timestamp:", block.timestamp);
-        console.log("state.maturity:", state.maturity);
-        console.log("state.totalLpSupply:", state.totalLpSupply);
-        console.log("state.reserveUnderlying:", state.reserveUnderlying);
-        console.log("state.reserveYield:", state.reserveYield);
-        console.log("params.zeroForOne:", params.zeroForOne);
-        console.log("params.amountSpecified:", params.amountSpecified);
-
         if (block.timestamp >= state.maturity) revert MarketExpired();
         if (state.totalLpSupply == 0) revert MarketNotInitialized();
 
@@ -185,15 +174,6 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
             (currencyIn, currencyOut, amount, isExactInput) = _getSwapContext(key, params);
             bool isInputUnderlying = Currency.unwrap(currencyIn) == state.underlyingToken;
 
-            console.log("--- Swap Context ---");
-            console.log("currencyIn:", Currency.unwrap(currencyIn));
-            console.log("currencyOut:", Currency.unwrap(currencyOut));
-            console.log("amount:", amount);
-            console.log("isExactInput:", isExactInput);
-            console.log("isInputUnderlying:", isInputUnderlying);
-            console.log("state.underlyingToken:", state.underlyingToken);
-            console.log("state.yieldToken:", state.yieldToken);
-
             // 2. Calculate Swap Result
             (uint256 amountIn, uint256 amountOut, uint256 newRUnd, uint256 newRYield) = _calculateSwapResult(
                 state,
@@ -202,44 +182,18 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
                 amount
             );
 
-            console.log("--- Swap Calculation Result ---");
-            console.log("amountIn:", amountIn);
-            console.log("amountOut:", amountOut);
-            console.log("newRUnd:", newRUnd);
-            console.log("newRYield:", newRYield);
-
             // 3. Update State with new reserve values
             state.reserveUnderlying = newRUnd.toUint128();
             state.reserveYield = newRYield.toUint128();
 
-            console.log("--- Before _take and _settle ---");
-            console.log("Hook underlying balance:", IERC20(state.underlyingToken).balanceOf(address(this)));
-            console.log("Hook yield balance:", IERC20(state.yieldToken).balanceOf(address(this)));
-            console.log(
-                "PoolManager underlying balance:",
-                IERC20(state.underlyingToken).balanceOf(address(poolManager))
-            );
-            console.log("PoolManager yield balance:", IERC20(state.yieldToken).balanceOf(address(poolManager)));
-
-            console.log("Calling _take with currencyIn, amountIn:", amountIn);
+            // 4. Settle
 
             // Take currencyIn amountIn from the user to the PoolManager, and take claim tokens to the hook
             currencyIn.take(poolManager, address(this), amountIn, true);
 
-            console.log("--- After _take ---");
-            console.log("Hook underlying balance:", IERC20(state.underlyingToken).balanceOf(address(this)));
-            console.log("Hook yield balance:", IERC20(state.yieldToken).balanceOf(address(this)));
-
-            console.log("Calling _settle with currencyOut, amountOut:", amountOut);
-
             // Burn currencyOut amountOut claimTOkens from the hook to the PoolManager, and settle actual tokens to the user
             currencyOut.settle(poolManager, address(this), amountOut, true);
 
-            console.log("--- After _settle ---");
-            console.log("Hook underlying balance:", IERC20(state.underlyingToken).balanceOf(address(this)));
-            console.log("Hook yield balance:", IERC20(state.yieldToken).balanceOf(address(this)));
-
-            // 4. Construct Delta & Settle
             if (isExactInput) {
                 unspecifiedDelta = -amountOut.toInt128();
             } else {
@@ -247,17 +201,8 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
             }
         }
 
+        // 5. Prepare BeforeSwapDelta
         BeforeSwapDelta delta = toBeforeSwapDelta(-int128(params.amountSpecified), unspecifiedDelta);
-
-        console.log("Original Swap params:");
-        console.log("  zeroForOne:", params.zeroForOne);
-        console.log("  amountSpecified:", params.amountSpecified);
-
-        console.log("Constructed Delta:");
-        console.log("  deltaSpecified:", delta.getSpecifiedDelta());
-        console.log("  deltaUnspecified:", delta.getUnspecifiedDelta());
-
-        console.log("=== _beforeSwap END ===");
 
         return (BaseHook.beforeSwap.selector, delta, 0);
     }
