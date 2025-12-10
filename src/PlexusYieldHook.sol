@@ -222,14 +222,18 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
             console.log("PoolManager yield balance:", IERC20(state.yieldToken).balanceOf(address(poolManager)));
 
             console.log("Calling _take with currencyIn, amountIn:", amountIn);
-            _take(currencyIn, amountIn);
+
+            // Take currencyIn amountIn from the user to the PoolManager, and take claim tokens to the hook
+            currencyIn.take(poolManager, address(this), amountIn, true);
 
             console.log("--- After _take ---");
             console.log("Hook underlying balance:", IERC20(state.underlyingToken).balanceOf(address(this)));
             console.log("Hook yield balance:", IERC20(state.yieldToken).balanceOf(address(this)));
 
             console.log("Calling _settle with currencyOut, amountOut:", amountOut);
-            _settle(currencyOut, amountOut);
+
+            // Burn currencyOut amountOut claimTOkens from the hook to the PoolManager, and settle actual tokens to the user
+            currencyOut.settle(poolManager, address(this), amountOut, true);
 
             console.log("--- After _settle ---");
             console.log("Hook underlying balance:", IERC20(state.underlyingToken).balanceOf(address(this)));
@@ -241,13 +245,17 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
             } else {
                 unspecifiedDelta = amountIn.toInt128();
             }
-
-            // console.log("--- Delta Construction ---");
-            // console.logInt(int256(-int128(params.amountSpecified)));
-            // console.logInt(int256(unspecifiedDelta));
         }
 
         BeforeSwapDelta delta = toBeforeSwapDelta(-int128(params.amountSpecified), unspecifiedDelta);
+
+        console.log("Original Swap params:");
+        console.log("  zeroForOne:", params.zeroForOne);
+        console.log("  amountSpecified:", params.amountSpecified);
+
+        console.log("Constructed Delta:");
+        console.log("  deltaSpecified:", delta.getSpecifiedDelta());
+        console.log("  deltaUnspecified:", delta.getUnspecifiedDelta());
 
         console.log("=== _beforeSwap END ===");
 
@@ -537,32 +545,5 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
             );
             amountOut = amount;
         }
-    }
-
-    function _settle(Currency currency, uint256 amount) internal {
-        console.log("  _settle: currency:", Currency.unwrap(currency));
-        console.log("  _settle: amount:", amount);
-
-        console.log("  _settle: calling poolManager.sync()");
-        poolManager.sync(currency);
-
-        console.log("  _settle: calling currency.transfer()");
-        console.log("  _settle: hook balance of token:", IERC20(Currency.unwrap(currency)).balanceOf(address(this)));
-
-        // Use SafeERC20 transfer instead of currency.transfer for ERC20 tokens
-        address token = Currency.unwrap(currency);
-        IERC20(token).safeTransfer(address(poolManager), amount);
-
-        console.log("  _settle: calling poolManager.settle()");
-        poolManager.settle();
-        console.log("  _settle: done");
-    }
-
-    function _take(Currency currency, uint256 amount) internal {
-        console.log("  _take: currency:", Currency.unwrap(currency));
-        console.log("  _take: amount:", amount);
-        console.log("  _take: calling poolManager.take()");
-        poolManager.take(currency, address(this), amount);
-        console.log("  _take: done");
     }
 }
