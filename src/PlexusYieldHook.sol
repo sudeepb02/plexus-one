@@ -11,6 +11,7 @@ import {SwapParams} from "v4-core/types/PoolOperation.sol";
 import {IPoolManager, ModifyLiquidityParams} from "v4-core/interfaces/IPoolManager.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
+import {IUnlockCallback} from "v4-core/interfaces/callback/IUnlockCallback.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -23,7 +24,9 @@ import {YieldMath} from "./lib/YieldMath.sol";
 
 import {YieldToken} from "./YieldToken.sol";
 
-contract PlexusYieldHook is BaseHook, Ownable, ERC6909 {
+import {console} from "forge-std/console.sol";
+
+contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
     using PoolIdLibrary for PoolKey;
     using SafeCast for int256;
     using SafeCast for uint256;
@@ -54,6 +57,15 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909 {
         uint48 maturity;
         address yieldToken;
         address underlyingToken;
+    }
+
+    struct PMCallbackData {
+        uint8 actionType; // 0 for add liquidity, 1 for remove liquidity
+        address sender;
+        uint256 amountUnderlying;
+        uint256 amountYield;
+        uint256 shares;
+        PoolKey key;
     }
 
     mapping(PoolId => MarketState) public marketStates;
@@ -124,7 +136,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909 {
         PoolKey calldata,
         ModifyLiquidityParams calldata,
         bytes calldata
-    ) internal override pure returns (bytes4) {
+    ) internal pure override returns (bytes4) {
         revert AddLiquidityThroughHook();
     }
 
@@ -133,7 +145,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909 {
         PoolKey calldata,
         ModifyLiquidityParams calldata,
         bytes calldata
-    ) internal override pure returns (bytes4) {
+    ) internal pure override returns (bytes4) {
         revert RemoveLiquidityThroughHook();
     }
 
@@ -144,6 +156,15 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909 {
         bytes calldata
     ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
         MarketState storage state = marketStates[key.toId()];
+
+        console.log("=== _beforeSwap START ===");
+        console.log("block.timestamp:", block.timestamp);
+        console.log("state.maturity:", state.maturity);
+        console.log("state.totalLpSupply:", state.totalLpSupply);
+        console.log("state.reserveUnderlying:", state.reserveUnderlying);
+        console.log("state.reserveYield:", state.reserveYield);
+        console.log("params.zeroForOne:", params.zeroForOne);
+        console.log("params.amountSpecified:", params.amountSpecified);
 
         if (block.timestamp >= state.maturity) revert MarketExpired();
         if (state.totalLpSupply == 0) revert MarketNotInitialized();
@@ -161,6 +182,15 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909 {
             (currencyIn, currencyOut, amount, isExactInput) = _getSwapContext(key, params);
             bool isInputUnderlying = Currency.unwrap(currencyIn) == state.underlyingToken;
 
+            console.log("--- Swap Context ---");
+            console.log("currencyIn:", Currency.unwrap(currencyIn));
+            console.log("currencyOut:", Currency.unwrap(currencyOut));
+            console.log("amount:", amount);
+            console.log("isExactInput:", isExactInput);
+            console.log("isInputUnderlying:", isInputUnderlying);
+            console.log("state.underlyingToken:", state.underlyingToken);
+            console.log("state.yieldToken:", state.yieldToken);
+
             // 2. Calculate Swap Result
             (uint256 amountIn, uint256 amountOut, uint256 newRUnd, uint256 newRYield) = _calculateSwapResult(
                 state,
@@ -169,34 +199,64 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909 {
                 amount
             );
 
+            console.log("--- Swap Calculation Result ---");
+            console.log("amountIn:", amountIn);
+            console.log("amountOut:", amountOut);
+            console.log("newRUnd:", newRUnd);
+            console.log("newRYield:", newRYield);
+
             // 3. Update State with new reserve values
             state.reserveUnderlying = newRUnd.toUint128();
             state.reserveYield = newRYield.toUint128();
 
+            console.log("--- Before _take and _settle ---");
+            console.log("Hook underlying balance:", IERC20(state.underlyingToken).balanceOf(address(this)));
+            console.log("Hook yield balance:", IERC20(state.yieldToken).balanceOf(address(this)));
+            console.log(
+                "PoolManager underlying balance:",
+                IERC20(state.underlyingToken).balanceOf(address(poolManager))
+            );
+            console.log("PoolManager yield balance:", IERC20(state.yieldToken).balanceOf(address(poolManager)));
+
+            console.log("Calling _take with currencyIn, amountIn:", amountIn);
             _take(currencyIn, amountIn);
+
+            console.log("--- After _take ---");
+            console.log("Hook underlying balance:", IERC20(state.underlyingToken).balanceOf(address(this)));
+            console.log("Hook yield balance:", IERC20(state.yieldToken).balanceOf(address(this)));
+
+            console.log("Calling _settle with currencyOut, amountOut:", amountOut);
             _settle(currencyOut, amountOut);
 
-            // 4. Construct Delta & Settle
-            // We return a delta that cancels out the user's specified amount, effectively skipping the core swap logic.
-            // We must also return the correct unspecified delta so the PoolManager knows how much the user receives/pays.
+            console.log("--- After _settle ---");
+            console.log("Hook underlying balance:", IERC20(state.underlyingToken).balanceOf(address(this)));
+            console.log("Hook yield balance:", IERC20(state.yieldToken).balanceOf(address(this)));
 
+            // 4. Construct Delta & Settle
             if (isExactInput) {
-                // Exact Input: Unspecified is Output
-                // Hook gives Output -> Negative Delta
                 unspecifiedDelta = -amountOut.toInt128();
             } else {
-                // Exact Output: Unspecified is Input
-                // Hook takes Input -> Positive Delta
                 unspecifiedDelta = amountIn.toInt128();
             }
+
+            // console.log("--- Delta Construction ---");
+            // console.logInt(int256(-int128(params.amountSpecified)));
+            // console.logInt(int256(unspecifiedDelta));
         }
 
-        BeforeSwapDelta delta = toBeforeSwapDelta(
-            -int128(params.amountSpecified), // Specified: Cancel out the input/output
-            unspecifiedDelta // Unspecified: The amount the hook takes/gives
-        );
+        BeforeSwapDelta delta = toBeforeSwapDelta(-int128(params.amountSpecified), unspecifiedDelta);
+
+        console.log("=== _beforeSwap END ===");
 
         return (BaseHook.beforeSwap.selector, delta, 0);
+    }
+
+    function unlockCallback(bytes calldata data) external override returns (bytes memory) {
+        PMCallbackData memory callbackData = abi.decode(data, (PMCallbackData));
+
+        // @todo
+
+        return "";
     }
 
     /////////////////////////////////////////////////////////////////////////////////////
@@ -204,10 +264,25 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909 {
     /////////////////////////////////////////////////////////////////////////////////////
 
     function addLiquidity(
-        PoolKey calldata key, 
-        uint256 amountUnderlying, 
+        PoolKey calldata key,
+        uint256 amountUnderlying,
         uint256 amountYield
     ) external returns (uint256 shares) {
+        // Unlock the pool manager manually for adding liquidity to the PM
+        // and mint ERC6909 Claim tokens to the hook
+        poolManager.unlock(
+            abi.encode(
+                PMCallbackData({
+                    actionType: 0,
+                    sender: msg.sender,
+                    amountUnderlying: amountUnderlying,
+                    amountYield: amountYield,
+                    shares: 0,
+                    key: key
+                })
+            )
+        );
+
         PoolId id = key.toId();
         MarketState storage state = marketStates[id];
 
@@ -380,12 +455,29 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909 {
     }
 
     function _settle(Currency currency, uint256 amount) internal {
+        console.log("  _settle: currency:", Currency.unwrap(currency));
+        console.log("  _settle: amount:", amount);
+
+        console.log("  _settle: calling poolManager.sync()");
         poolManager.sync(currency);
-        currency.transfer(address(poolManager), amount);
+
+        console.log("  _settle: calling currency.transfer()");
+        console.log("  _settle: hook balance of token:", IERC20(Currency.unwrap(currency)).balanceOf(address(this)));
+
+        // Use SafeERC20 transfer instead of currency.transfer for ERC20 tokens
+        address token = Currency.unwrap(currency);
+        IERC20(token).safeTransfer(address(poolManager), amount);
+
+        console.log("  _settle: calling poolManager.settle()");
         poolManager.settle();
+        console.log("  _settle: done");
     }
 
     function _take(Currency currency, uint256 amount) internal {
+        console.log("  _take: currency:", Currency.unwrap(currency));
+        console.log("  _take: amount:", amount);
+        console.log("  _take: calling poolManager.take()");
         poolManager.take(currency, address(this), amount);
+        console.log("  _take: done");
     }
 }
