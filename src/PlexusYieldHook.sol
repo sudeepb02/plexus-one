@@ -37,6 +37,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909 {
 
     error InvalidCurrency();
     error InvalidAmount();
+    error InvalidHook();
     error InvalidMaturity();
     error MarketExpired();
     error PoolNotRegistered();
@@ -267,7 +268,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909 {
     function registerPool(PoolKey calldata key, address yieldToken) external onlyOwner {
         PoolId id = key.toId();
 
-        if (address(key.hooks) != address(this)) revert("Invalid Hook Address");
+        if (address(key.hooks) != address(this)) revert InvalidHook();
 
         address underlying = address(YieldToken(yieldToken).UNDERLYING_TOKEN());
         address token0 = Currency.unwrap(key.currency0);
