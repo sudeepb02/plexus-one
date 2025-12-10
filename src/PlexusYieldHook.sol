@@ -468,12 +468,13 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
         }
 
         // We need to pay the PM the erc6909 tokens we hold for the liquidity being removed
-        key.currency0.settle(poolManager, sender, amount0, true);
-        key.currency1.settle(poolManager, sender, amount1, true);
+        key.currency0.settle(poolManager, address(this), amount0, true);
+        key.currency1.settle(poolManager, address(this), amount1, true);
 
         // Now, the PM has a credit of amount0 and amount1 of the currency to us
-        // We can take actual tokens from the PM to balance out that credit
-        key.currency0.take(poolManager, address(this), amount0, false);
-        key.currency1.take(poolManager, address(this), amount1, false);
+        // We can take actual tokens from the PM to balance out that credit,
+        // which needs to be sent to the user removing liquidity
+        key.currency0.take(poolManager, sender, amount0, false);
+        key.currency1.take(poolManager, sender, amount1, false);
     }
 }
