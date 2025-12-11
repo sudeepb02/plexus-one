@@ -234,7 +234,7 @@ export function SwapCard() {
           </div>
         </div>
 
-        {/* Breakeven Display - Compact */}
+        {/* Breakeven Display - Compact
         {showScenarios && (
           <div className="flex items-center justify-between p-2.5 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 rounded-lg border border-purple-200 dark:border-purple-800/50 shadow-sm">
             <div className="flex items-center gap-1.5">
@@ -250,7 +250,7 @@ export function SwapCard() {
               {breakeven.toFixed(2)}%
             </span>
           </div>
-        )}
+        )} */}
 
         {/* Collateral Warning */}
         {swapMode === 'variable' && parseFloat(inputAmount) > 0 && (
@@ -270,7 +270,7 @@ export function SwapCard() {
               <span className="text-xs text-gray-500 dark:text-gray-500">Interactive</span>
             </div>
             
-            {/* Rate Slider */}
+            {/* Rate Slider with P&L Display */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600 dark:text-gray-400">Yield Rate at Maturity</span>
@@ -290,76 +290,22 @@ export function SwapCard() {
                 <span>7.5%</span>
                 <span>15%</span>
               </div>
-            </div>
-
-            {/* P&L Result - Much Improved Colors */}
-            <div className={`p-3 rounded-lg shadow-md ${
-              simulatedPnL >= 0 
-                ? 'bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/40 dark:to-green-900/40 border-2 border-emerald-300 dark:border-emerald-700'
-                : 'bg-gradient-to-br from-rose-100 to-red-100 dark:from-rose-900/40 dark:to-red-900/40 border-2 border-rose-300 dark:border-rose-700'
-            }`}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                  P&L at {simulatedRate.toFixed(2)}%
+              
+              {/* P&L Value Display - Inline */}
+              <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
+                <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  P&L at {simulatedRate.toFixed(2)}%:
                 </span>
                 <div className="flex items-center gap-1.5">
-                  <span className={`text-xl font-extrabold ${
+                  <span className={`text-lg font-bold ${
                     simulatedPnL >= 0
-                      ? 'text-emerald-700 dark:text-emerald-300'
-                      : 'text-rose-700 dark:text-rose-300'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-rose-600 dark:text-rose-400'
                   }`}>
                     {simulatedPnL >= 0 ? '+' : ''}{simulatedPnL.toFixed(2)}
                   </span>
                   <span className="text-xs font-medium text-gray-600 dark:text-gray-400">USDC</span>
                 </div>
-              </div>
-            </div>
-
-            {/* Visual Gradient Bar - Much Improved Colors */}
-            <div className="space-y-2">
-              <div className="relative h-10 rounded-lg overflow-hidden shadow-md border border-gray-300 dark:border-gray-600">
-                {/* Much improved gradient with vibrant colors */}
-                <div className={`absolute inset-0 ${
-                  isLongPosition 
-                    ? 'bg-gradient-to-r from-rose-500 via-yellow-200 via-50% to-emerald-500'
-                    : 'bg-gradient-to-r from-emerald-500 via-yellow-200 via-50% to-rose-500'
-                }`} />
-                
-                {/* Breakeven Marker - Improved */}
-                <div 
-                  className="absolute top-0 bottom-0 w-1 bg-purple-700 dark:bg-purple-400 z-10 shadow-lg"
-                  style={{ left: `${Math.min(100, (breakeven / 15) * 100)}%` }}
-                >
-                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-purple-600 dark:bg-purple-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap shadow-md">
-                    BE {breakeven.toFixed(1)}%
-                  </div>
-                </div>
-                
-                {/* Implied Rate Marker - Improved */}
-                <div 
-                  className="absolute top-0 bottom-0 w-1 bg-gray-900 dark:bg-white z-10 shadow-lg"
-                  style={{ left: `${(impliedRate / 15) * 100}%` }}
-                >
-                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap shadow-md">
-                    Implied {impliedRate}%
-                  </div>
-                </div>
-                
-                {/* Simulated Rate Marker - Much More Visible */}
-                <div 
-                  className="absolute top-0 bottom-0 w-1.5 bg-blue-600 dark:bg-blue-400 shadow-2xl z-20 rounded-full"
-                  style={{ left: `${(simulatedRate / 15) * 100}%` }}
-                >
-                  <div className="absolute top-1/2 -translate-y-1/2 -left-1.5 w-4 h-4 bg-blue-600 dark:bg-blue-400 rounded-full border-2 border-white shadow-xl" />
-                </div>
-              </div>
-              <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 font-semibold px-1">
-                <span className="flex items-center gap-1">
-                  {isLongPosition ? '📉 Loss Zone' : '💰 Profit Zone'}
-                </span>
-                <span className="flex items-center gap-1">
-                  {isLongPosition ? '💰 Profit Zone' : '📉 Loss Zone'}
-                </span>
               </div>
             </div>
           </div>
