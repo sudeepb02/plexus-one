@@ -4,7 +4,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { SwapCard } from '@/components/swap/SwapCard';
 import { RatesChart } from '@/components/charts/RatesChart';
 import { TradeHistory } from '@/components/trades/TradeHistory';
-import { TrendingUp, Activity, BarChart3 } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 
 export default function Home() {
   return (
@@ -76,45 +76,6 @@ export default function Home() {
 
         {/* Trade History - Full Width at Bottom */}
         <TradeHistory />
-
-        {/* Info Section */}
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-lg p-6">
-            <div className="w-10 h-10 rounded bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center mb-4">
-              <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
-              Secure & Transparent
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-              Built on Uniswap V4 with audited smart contracts. Your funds remain secure.
-            </p>
-          </div>
-
-          <div className="bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-lg p-6">
-            <div className="w-10 h-10 rounded bg-green-50 dark:bg-green-950/30 flex items-center justify-center mb-4">
-              <TrendingUp className="w-5 h-5 text-green-600 dark:text-green-400" />
-            </div>
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
-              Efficient Trading
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-              Swap between fixed and variable rates instantly with minimal slippage.
-            </p>
-          </div>
-
-          <div className="bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-lg p-6">
-            <div className="w-10 h-10 rounded bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center mb-4">
-              <BarChart3 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-            </div>
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
-              Real-Time Data
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-              Track rates and monitor trends with live market analytics.
-            </p>
-          </div>
-        </div>
       </main>
 
       {/* Footer */}
