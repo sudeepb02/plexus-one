@@ -16,6 +16,7 @@ abstract contract DeployConfig is Script {
     address constant MOCK_USDC_UNI_SEPOLIA = 0xfA0828F8cBcbf3D56c7b0Ad9cFff2A45D376eaB9;
     address constant YIELD_TOKEN_MOCK_USDC_UNI_SEPOLIA = 0xA6a70C64bfc8510B9C7792df0c585e7496A46d6D;
     address constant PLEXUS_YIELD_HOOK_UNI_SEPOLIA = 0x89bf534a9f43EA428000858a069ef3C3b960aa88;
+    address constant YIELD_ORACLE_MOCK_USDC_UNI_SEPOLIA = 0x218aF9861135faDF0D9e2529096b1f4146143adF;
 
     /// @notice Get the PoolManager address for the current chain
     function getPoolManager() internal view returns (address) {
