@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #fafbfc;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f4f6;
+  --accent: #1e40af;
+  --muted: #f9fafb;
+  --border: #e5e7eb;
+  --success: #059669;
+  --warning: #d97706;
+  --error: #dc2626;
+  --input-bg: #ffffff;
+  --nav-bg: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0d14;
+    --foreground: #f3f4f6;
+    --card: #161b22;
+    --card-foreground: #f3f4f6;
+    --primary: #3b82f6;
+    --primary-foreground: #ffffff;
+    --secondary: #1f2937;
+    --accent: #60a5fa;
+    --muted: #1f2937;
+    --border: #30363d;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --input-bg: #0d1117;
+    --nav-bg: #161b22;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-geist-sans);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Professional button styling */
+.btn-primary {
+  @apply bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded transition-colors;
+}
+
+.btn-secondary {
+  @apply bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100 font-medium px-4 py-2 rounded transition-colors;
+}
+
+/* Card styling with subtle shadows */
+.card {
+  @apply bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d] rounded-lg shadow-sm;
+}
