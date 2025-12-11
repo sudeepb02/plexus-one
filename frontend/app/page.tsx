@@ -11,7 +11,7 @@ export default function Home() {
     <div className="min-h-screen bg-[#fafbfc] dark:bg-[#0a0d14]">
       {/* Navigation Bar */}
       <nav className="bg-white dark:bg-[#161b22] border-b border-gray-200 dark:border-[#30363d] sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo and Nav Items */}
             <div className="flex items-center gap-8">
@@ -37,8 +37,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Wallet Connect - Compact */}
-            <div className="flex items-center gap-3">
+            {/* Wallet Connect - Custom Styled */}
+            <div className="rainbowkit-custom">
               <ConnectButton 
                 showBalance={false}
                 chainStatus="icon"
@@ -50,7 +50,7 @@ export default function Home() {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
@@ -61,19 +61,21 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Swap Card */}
+        {/* Main Grid - Swapped Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          {/* Left Column - Chart (now takes 2 columns) */}
+          <div className="lg:col-span-2">
+            <RatesChart />
+          </div>
+
+          {/* Right Column - Swap Card */}
           <div className="lg:col-span-1">
             <SwapCard />
           </div>
-
-          {/* Right Column - Charts & Trades */}
-          <div className="lg:col-span-2 space-y-6">
-            <RatesChart />
-            <TradeHistory />
-          </div>
         </div>
+
+        {/* Trade History - Full Width at Bottom */}
+        <TradeHistory />
 
         {/* Info Section */}
         <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -117,7 +119,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="mt-16 border-t border-gray-200 dark:border-[#30363d] bg-white dark:bg-[#161b22]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="text-sm text-gray-600 dark:text-gray-400">
               © 2024 PlexusOne. Built on Uniswap V4.
