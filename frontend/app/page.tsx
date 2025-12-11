@@ -50,32 +50,22 @@ export default function Home() {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
-            Interest Rate Swaps
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Trade fixed and variable rate positions on decentralized markets
-          </p>
-        </div>
-
-        {/* Main Grid - Swapped Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          {/* Left Column - Chart (now takes 2 columns) */}
-          <div className="lg:col-span-2">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Main Grid - Optimized for alignment */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Chart (takes 2 columns) */}
+          <div className="lg:col-span-2 space-y-6">
             <RatesChart />
+            <TradeHistory />
           </div>
 
-          {/* Right Column - Swap Card */}
+          {/* Right Column - Swap Card (takes 1 column, sticky on larger screens) */}
           <div className="lg:col-span-1">
-            <SwapCard />
+            <div className="lg:sticky lg:top-6">
+              <SwapCard />
+            </div>
           </div>
         </div>
-
-        {/* Trade History - Full Width at Bottom */}
-        <TradeHistory />
       </main>
 
       {/* Footer */}
