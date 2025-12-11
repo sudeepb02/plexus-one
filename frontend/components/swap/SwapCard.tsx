@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useSwap } from '@/lib/SwapContext';
-import { ArrowDownUp, TrendingUp, TrendingDown, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, Calculator, Zap } from 'lucide-react';
+import { ArrowDownUp, TrendingUp, TrendingDown, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, Calculator, Zap, DollarSign } from 'lucide-react';
 
 export function SwapCard() {
   const { swapMode, setSwapMode, inputAmount, setInputAmount, isLoading } = useSwap();
@@ -18,6 +18,7 @@ export function SwapCard() {
   // Mock maturity date - in production, fetch from contract
   const maturityDate = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000);
   const daysToMaturity = Math.floor((maturityDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+  const yearsToMaturity = daysToMaturity / 365;
   
   // Position type: 'long' = betting rates go up, 'short' = betting rates go down
   const isLongPosition = swapMode === 'fixed';
@@ -31,46 +32,78 @@ export function SwapCard() {
     const value = e.target.value;
     setInputAmount(value);
     
-    // Mock calculation
+    // Fixed: Calculate output based on time-adjusted implied rate
+    // YT value = Principal * Rate * Time
+    const principal = parseFloat(value) || 0;
+    
     if (swapMode === 'fixed') {
-      setEstimatedOutput((parseFloat(value) * 20 || 0).toFixed(2));
+      // Buying YT (Long): How many YT tokens do we get for our USDC?
+      // YT Price = Rate * Time (e.g., 5.25% * 0.5 years = 2.625% of principal)
+      const ytPrice = (impliedRate / 100) * yearsToMaturity;
+      const ytAmount = principal / ytPrice;
+      setEstimatedOutput(ytAmount.toFixed(2));
     } else {
-      setEstimatedOutput((parseFloat(value) * 0.048 || 0).toFixed(2));
+      // Selling YT (Short): How much USDC do we get for selling YT?
+      // With 10x leverage: can sell 10x worth of YT
+      const ytPrice = (impliedRate / 100) * yearsToMaturity;
+      const ytAmount = (principal * 10) / ytPrice;
+      setEstimatedOutput(ytAmount.toFixed(2));
     }
     
     setShowScenarios(parseFloat(value) > 0);
   };
 
-  // Calculate P&L at a specific rate (for simulator)
+  // Fixed: Calculate P&L at a specific rate (time-adjusted)
   const calculatePnLAtRate = (rate: number) => {
     if (!inputAmount || parseFloat(inputAmount) === 0) return 0;
-    const amount = parseFloat(inputAmount);
+    const amountIn = parseFloat(inputAmount);
     const ytAmount = parseFloat(estimatedOutput);
 
     if (isLongPosition) {
-      return ytAmount * (rate / 100 - impliedRate / 100);
+      // Long Position: Bought YT, profit when actual yield > implied
+      // Cost: amountIn USDC
+      // Payout at maturity: ytAmount * (actualRate / 100) * yearsToMaturity
+      const payout = ytAmount * (rate / 100) * yearsToMaturity;
+      return payout - amountIn;
     } else {
-      const premium = amount * (impliedRate / 100);
-      return premium - (ytAmount * (rate / 100));
+      // Short Position: Sold YT, profit when actual yield < implied
+      // Premium received: YT sold at implied rate
+      const premiumReceived = ytAmount * (impliedRate / 100) * yearsToMaturity;
+      // Debt at maturity: ytAmount * (actualRate / 100) * yearsToMaturity
+      const debt = ytAmount * (rate / 100) * yearsToMaturity;
+      return premiumReceived - debt;
     }
   };
 
-  // Calculate breakeven rate
+  // Fixed: Calculate breakeven rate (time-adjusted)
   const calculateBreakeven = () => {
     if (!inputAmount || parseFloat(inputAmount) === 0) return impliedRate;
-    const amount = parseFloat(inputAmount);
+    const amountIn = parseFloat(inputAmount);
     const ytAmount = parseFloat(estimatedOutput);
     
-    if (isLongPosition) {
-      return ((amount / ytAmount) + (impliedRate / 100)) * 100;
-    } else {
-      const premium = amount * (impliedRate / 100);
-      return (premium / ytAmount) * 100;
-    }
+    if (ytAmount === 0 || yearsToMaturity === 0) return impliedRate;
+    
+    // Breakeven is where P&L = 0
+    // For long: payout = cost => ytAmount * (rate/100) * time = amountIn
+    // rate = (amountIn / (ytAmount * time)) * 100
+    return (amountIn / (ytAmount * yearsToMaturity)) * 100;
   };
 
   const breakeven = calculateBreakeven();
   const simulatedPnL = calculatePnLAtRate(simulatedRate);
+
+  // Improved: Token Logo Component
+  const USDCLogo = () => (
+    <div className="relative w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 flex items-center justify-center shadow-md ring-2 ring-blue-300 dark:ring-blue-800">
+      <DollarSign className="w-3.5 h-3.5 text-white font-bold" strokeWidth={3} />
+    </div>
+  );
+
+  const YTLogo = () => (
+    <div className="relative w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 via-green-500 to-emerald-600 flex items-center justify-center shadow-md ring-2 ring-emerald-300 dark:ring-emerald-800">
+      <div className="text-white text-[9px] font-extrabold">YT</div>
+    </div>
+  );
 
   // Tooltip Component
   const Tooltip = ({ id, title, description }: { id: string; title: string; description: string }) => (
@@ -126,13 +159,13 @@ export function SwapCard() {
       </div>
 
       <div className="p-4 space-y-3">
-        {/* Position Selector */}
+        {/* Position Selector - Improved Colors */}
         <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-[#0d1117] rounded-lg">
           <button
             onClick={() => setSwapMode('fixed')}
             className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium transition-all ${
               swapMode === 'fixed'
-                ? 'bg-white dark:bg-[#161b22] text-green-600 dark:text-green-400 shadow-sm'
+                ? 'bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/40 dark:to-green-950/40 text-emerald-700 dark:text-emerald-400 shadow-sm ring-1 ring-emerald-200 dark:ring-emerald-800'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
@@ -143,7 +176,7 @@ export function SwapCard() {
             onClick={() => setSwapMode('variable')}
             className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium transition-all ${
               swapMode === 'variable'
-                ? 'bg-white dark:bg-[#161b22] text-red-600 dark:text-red-400 shadow-sm'
+                ? 'bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/40 dark:to-red-950/40 text-rose-700 dark:text-rose-400 shadow-sm ring-1 ring-rose-200 dark:ring-rose-800'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
@@ -164,11 +197,11 @@ export function SwapCard() {
               value={inputAmount}
               onChange={handleInputChange}
               placeholder="0.00"
-              className="w-full px-3 py-2.5 pr-16 bg-gray-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#30363d] rounded-lg text-lg font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+              className="w-full px-3 py-2.5 pr-24 bg-gray-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#30363d] rounded-lg text-lg font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-              <div className="w-5 h-5 rounded-full bg-blue-600"></div>
-              <span className="text-sm font-medium text-gray-900 dark:text-white">USDC</span>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+              <USDCLogo />
+              <span className="text-sm font-semibold text-gray-900 dark:text-white">USDC</span>
             </div>
           </div>
         </div>
@@ -184,7 +217,7 @@ export function SwapCard() {
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="text-gray-600 dark:text-gray-400">You receive</span>
-            <span className="text-gray-500 dark:text-gray-400">Buying YT</span>
+            <span className="text-gray-500 dark:text-gray-400">{swapMode === 'fixed' ? 'Buying' : 'Selling'} YT</span>
           </div>
           <div className="relative">
             <input
@@ -192,28 +225,28 @@ export function SwapCard() {
               value={estimatedOutput}
               readOnly
               placeholder="0.00"
-              className="w-full px-3 py-2.5 pr-14 bg-gray-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#30363d] rounded-lg text-lg font-medium text-gray-900 dark:text-white"
+              className="w-full px-3 py-2.5 pr-20 bg-gray-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#30363d] rounded-lg text-lg font-medium text-gray-900 dark:text-white"
             />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-              <div className="w-5 h-5 rounded-full bg-purple-600"></div>
-              <span className="text-sm font-medium text-gray-900 dark:text-white">YT</span>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+              <YTLogo />
+              <span className="text-sm font-semibold text-gray-900 dark:text-white">YT</span>
             </div>
           </div>
         </div>
 
         {/* Breakeven Display - Compact */}
         {showScenarios && (
-          <div className="flex items-center justify-between p-2 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-900/50">
+          <div className="flex items-center justify-between p-2.5 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 rounded-lg border border-purple-200 dark:border-purple-800/50 shadow-sm">
             <div className="flex items-center gap-1.5">
-              <Calculator className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-              <span className="text-xs font-medium text-gray-900 dark:text-white">Breakeven</span>
+              <Calculator className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              <span className="text-xs font-semibold text-gray-900 dark:text-white">Breakeven</span>
               <Tooltip
                 id="breakeven"
                 title="Breakeven Rate"
                 description="The yield rate where you neither profit nor lose."
               />
             </div>
-            <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
+            <span className="text-base font-bold text-purple-600 dark:text-purple-400">
               {breakeven.toFixed(2)}%
             </span>
           </div>
@@ -221,27 +254,27 @@ export function SwapCard() {
 
         {/* Collateral Warning */}
         {swapMode === 'variable' && parseFloat(inputAmount) > 0 && (
-          <div className="flex items-start gap-2 p-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900/50">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+          <div className="flex items-start gap-2 p-2.5 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 rounded-lg border border-amber-200 dark:border-amber-800/50 shadow-sm">
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
             <div className="text-xs text-amber-900 dark:text-amber-200">
-              <span className="font-medium">Collateral Required:</span> {(parseFloat(inputAmount) * 0.1).toFixed(2)} USDC
+              <span className="font-semibold">Collateral Required:</span> {(parseFloat(inputAmount) * 0.1).toFixed(2)} USDC
             </div>
           </div>
         )}
 
         {/* Advanced Mode: Interactive P&L Simulator */}
         {advancedMode && showScenarios && (
-          <div className="p-3 bg-gray-50 dark:bg-[#0d1117] rounded-lg border border-gray-200 dark:border-[#30363d] space-y-2.5">
+          <div className="p-3 bg-gradient-to-br from-gray-50 to-slate-50 dark:from-[#0d1117] dark:to-[#0d1117] rounded-lg border border-gray-200 dark:border-[#30363d] space-y-3 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">P&L Simulator</span>
-              <span className="text-xs text-gray-500 dark:text-gray-500">Drag to test</span>
+              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">📊 P&L Simulator</span>
+              <span className="text-xs text-gray-500 dark:text-gray-500">Interactive</span>
             </div>
             
             {/* Rate Slider */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600 dark:text-gray-400">Yield Rate</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{simulatedRate.toFixed(2)}%</span>
+                <span className="text-gray-600 dark:text-gray-400">Yield Rate at Maturity</span>
+                <span className="font-bold text-gray-900 dark:text-white text-sm">{simulatedRate.toFixed(2)}%</span>
               </div>
               <input
                 type="range"
@@ -250,76 +283,93 @@ export function SwapCard() {
                 step="0.25"
                 value={simulatedRate}
                 onChange={(e) => setSimulatedRate(parseFloat(e.target.value))}
-                className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
               />
-              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 font-medium">
                 <span>0%</span>
+                <span>7.5%</span>
                 <span>15%</span>
               </div>
             </div>
 
-            {/* P&L Result - Compact */}
-            <div className={`p-2 rounded-lg ${
+            {/* P&L Result - Much Improved Colors */}
+            <div className={`p-3 rounded-lg shadow-md ${
               simulatedPnL >= 0 
-                ? 'bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/50'
-                : 'bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50'
+                ? 'bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/40 dark:to-green-900/40 border-2 border-emerald-300 dark:border-emerald-700'
+                : 'bg-gradient-to-br from-rose-100 to-red-100 dark:from-rose-900/40 dark:to-red-900/40 border-2 border-rose-300 dark:border-rose-700'
             }`}>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-600 dark:text-gray-400">
+                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
                   P&L at {simulatedRate.toFixed(2)}%
                 </span>
-                <span className={`text-sm font-bold ${
-                  simulatedPnL >= 0
-                    ? 'text-green-600 dark:text-green-400'
-                    : 'text-red-600 dark:text-red-400'
-                }`}>
-                  {simulatedPnL >= 0 ? '+' : ''}{simulatedPnL.toFixed(2)} USDC
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-xl font-extrabold ${
+                    simulatedPnL >= 0
+                      ? 'text-emerald-700 dark:text-emerald-300'
+                      : 'text-rose-700 dark:text-rose-300'
+                  }`}>
+                    {simulatedPnL >= 0 ? '+' : ''}{simulatedPnL.toFixed(2)}
+                  </span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">USDC</span>
+                </div>
               </div>
             </div>
 
-            {/* Visual Gradient Bar - Compact */}
-            <div className="space-y-1.5">
-              <div className="relative h-6 bg-gradient-to-r from-red-500 via-gray-300 to-green-500 rounded overflow-hidden">
-                {/* Implied Rate Marker */}
+            {/* Visual Gradient Bar - Much Improved Colors */}
+            <div className="space-y-2">
+              <div className="relative h-10 rounded-lg overflow-hidden shadow-md border border-gray-300 dark:border-gray-600">
+                {/* Much improved gradient with vibrant colors */}
+                <div className={`absolute inset-0 ${
+                  isLongPosition 
+                    ? 'bg-gradient-to-r from-rose-500 via-yellow-200 via-50% to-emerald-500'
+                    : 'bg-gradient-to-r from-emerald-500 via-yellow-200 via-50% to-rose-500'
+                }`} />
+                
+                {/* Breakeven Marker - Improved */}
                 <div 
-                  className="absolute top-0 bottom-0 w-0.5 bg-gray-900 dark:bg-white z-10"
-                  style={{ left: `${(impliedRate / 15) * 100}%` }}
+                  className="absolute top-0 bottom-0 w-1 bg-purple-700 dark:bg-purple-400 z-10 shadow-lg"
+                  style={{ left: `${Math.min(100, (breakeven / 15) * 100)}%` }}
                 >
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-xs font-bold text-gray-900 dark:text-white whitespace-nowrap">
-                    {impliedRate}%
+                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-purple-600 dark:bg-purple-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap shadow-md">
+                    BE {breakeven.toFixed(1)}%
                   </div>
                 </div>
-                {/* Simulated Rate Marker */}
+                
+                {/* Implied Rate Marker - Improved */}
                 <div 
-                  className="absolute top-0 bottom-0 w-1 bg-blue-600 z-20"
+                  className="absolute top-0 bottom-0 w-1 bg-gray-900 dark:bg-white z-10 shadow-lg"
+                  style={{ left: `${(impliedRate / 15) * 100}%` }}
+                >
+                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap shadow-md">
+                    Implied {impliedRate}%
+                  </div>
+                </div>
+                
+                {/* Simulated Rate Marker - Much More Visible */}
+                <div 
+                  className="absolute top-0 bottom-0 w-1.5 bg-blue-600 dark:bg-blue-400 shadow-2xl z-20 rounded-full"
                   style={{ left: `${(simulatedRate / 15) * 100}%` }}
-                />
+                >
+                  <div className="absolute top-1/2 -translate-y-1/2 -left-1.5 w-4 h-4 bg-blue-600 dark:bg-blue-400 rounded-full border-2 border-white shadow-xl" />
+                </div>
               </div>
-              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-                <span>{isLongPosition ? 'Loss' : 'Profit'}</span>
-                <span>{isLongPosition ? 'Profit' : 'Loss'}</span>
+              <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 font-semibold px-1">
+                <span className="flex items-center gap-1">
+                  {isLongPosition ? '📉 Loss Zone' : '💰 Profit Zone'}
+                </span>
+                <span className="flex items-center gap-1">
+                  {isLongPosition ? '💰 Profit Zone' : '📉 Loss Zone'}
+                </span>
               </div>
             </div>
           </div>
-        )}
-
-        {/* Simple Scenarios - Collapsible */}
-        {!advancedMode && showScenarios && (
-          <button
-            onClick={() => setShowScenarios(!showScenarios)}
-            className="w-full flex items-center justify-between p-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#0d1117] rounded-lg transition-colors"
-          >
-            <span>Quick Scenarios</span>
-            <ChevronDown className="w-4 h-4" />
-          </button>
         )}
 
         {/* Swap Button */}
         <button
           onClick={handleSwap}
           disabled={!inputAmount || parseFloat(inputAmount) === 0 || isLoading}
-          className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white font-medium rounded-lg transition-colors disabled:cursor-not-allowed text-sm"
+          className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-700 dark:disabled:to-gray-800 text-white font-semibold rounded-lg transition-all disabled:cursor-not-allowed text-sm shadow-md hover:shadow-lg"
         >
           {isLoading ? 'Processing...' : parseFloat(inputAmount) === 0 ? 'Enter amount' : 'Execute Swap'}
         </button>
