@@ -13,7 +13,7 @@ contract DeployYieldToken is DeployConfig {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
 
-        uint256 maturity = 90 days;
+        uint256 maturity = block.timestamp + 90 days;
         address underlyingToken = address(new MockERC20("Mock USDC", "mockUSDC", 6));
 
         string memory name = "Plexus Yield Mock USDC 90D";

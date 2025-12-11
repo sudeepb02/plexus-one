@@ -14,8 +14,6 @@ import {DeployConfig} from "./DeployConfig.s.sol";
 /// @title DeployPlexusYieldHook
 /// @notice Deploys the PlexusYieldHook contract using CREATE2 with a mined salt
 contract DeployPlexusYieldHook is DeployConfig {
-    address public constant OWNER = 0xb93E9D76C100453886e3dC51Aab4847Fd03bd3F1;
-
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
 
