@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Plexus - Fixed & Variable Rate Swaps",
+  title: "PlexusOne - Fixed & Variable Rate Swaps",
   description: "Trade interest rates with ease",
 };
 

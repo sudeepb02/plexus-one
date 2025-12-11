@@ -15,70 +15,75 @@ const mockData = [
 
 export function RatesChart() {
   return (
-    <div className="bg-white dark:bg-[#171717] rounded-3xl shadow-2xl p-6 border border-gray-200 dark:border-[#404040]">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+    <div className="bg-white dark:bg-[#161b22] rounded-lg border border-gray-200 dark:border-[#30363d] shadow-sm">
+      <div className="border-b border-gray-200 dark:border-[#30363d] p-4">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Rate History
         </h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
           Fixed vs Variable rates over time
         </p>
       </div>
 
-      <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={mockData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#404040" opacity={0.3} />
-          <XAxis 
-            dataKey="date" 
-            stroke="#9ca3af"
-            style={{ fontSize: '12px' }}
-          />
-          <YAxis 
-            stroke="#9ca3af"
-            style={{ fontSize: '12px' }}
-            tickFormatter={(value) => `${value}%`}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'rgba(23, 23, 23, 0.95)',
-              border: '1px solid #404040',
-              borderRadius: '12px',
-              color: '#fff',
-            }}
-            formatter={(value: number) => [`${value.toFixed(2)}%`, '']}
-          />
-          <Legend 
-            wrapperStyle={{ fontSize: '14px', paddingTop: '20px' }}
-          />
-          <Line
-            type="monotone"
-            dataKey="fixedRate"
-            stroke="#6366f1"
-            strokeWidth={3}
-            dot={{ fill: '#6366f1', r: 4 }}
-            activeDot={{ r: 6 }}
-            name="Fixed Rate"
-          />
-          <Line
-            type="monotone"
-            dataKey="variableRate"
-            stroke="#8b5cf6"
-            strokeWidth={3}
-            dot={{ fill: '#8b5cf6', r: 4 }}
-            activeDot={{ r: 6 }}
-            name="Variable Rate"
-          />
-        </LineChart>
-      </ResponsiveContainer>
+      <div className="p-4">
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={mockData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:stroke-[#30363d]" opacity={0.5} />
+            <XAxis 
+              dataKey="date" 
+              stroke="#9ca3af"
+              style={{ fontSize: '11px' }}
+              tick={{ fill: '#6b7280' }}
+            />
+            <YAxis 
+              stroke="#9ca3af"
+              style={{ fontSize: '11px' }}
+              tick={{ fill: '#6b7280' }}
+              tickFormatter={(value) => `${value}%`}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#ffffff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                fontSize: '12px',
+              }}
+              formatter={(value: number) => [`${value.toFixed(2)}%`, '']}
+            />
+            <Legend 
+              wrapperStyle={{ fontSize: '12px', paddingTop: '16px' }}
+            />
+            <Line
+              type="monotone"
+              dataKey="fixedRate"
+              stroke="#2563eb"
+              strokeWidth={2}
+              dot={{ fill: '#2563eb', r: 3 }}
+              activeDot={{ r: 5 }}
+              name="Fixed Rate"
+            />
+            <Line
+              type="monotone"
+              dataKey="variableRate"
+              stroke="#7c3aed"
+              strokeWidth={2}
+              dot={{ fill: '#7c3aed', r: 3 }}
+              activeDot={{ r: 5 }}
+              name="Variable Rate"
+            />
+          </LineChart>
+        </ResponsiveContainer>
 
-      <div className="mt-6 grid grid-cols-2 gap-4">
-        <div className="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl border border-indigo-200 dark:border-indigo-900">
-          <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Current Fixed</div>
-          <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">5.25%</div>
-        </div>
-        <div className="p-4 bg-purple-50 dark:bg-purple-950/30 rounded-2xl border border-purple-200 dark:border-purple-900">
-          <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Current Variable</div>
-          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">4.80%</div>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900/50">
+            <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Current Fixed</div>
+            <div className="text-xl font-semibold text-blue-600 dark:text-blue-400">5.25%</div>
+          </div>
+          <div className="p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-900/50">
+            <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Current Variable</div>
+            <div className="text-xl font-semibold text-purple-600 dark:text-purple-400">4.80%</div>
+          </div>
         </div>
       </div>
     </div>

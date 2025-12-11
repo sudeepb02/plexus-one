@@ -53,69 +53,71 @@ const mockTrades = [
 
 export function TradeHistory() {
   return (
-    <div className="bg-white dark:bg-[#171717] rounded-3xl shadow-2xl p-6 border border-gray-200 dark:border-[#404040]">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+    <div className="bg-white dark:bg-[#161b22] rounded-lg border border-gray-200 dark:border-[#30363d] shadow-sm">
+      <div className="border-b border-gray-200 dark:border-[#30363d] p-4">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Recent Trades
         </h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
           Live trading activity across all markets
         </p>
       </div>
 
-      <div className="space-y-3">
+      <div className="divide-y divide-gray-200 dark:divide-[#30363d]">
         {mockTrades.map((trade) => (
           <div
             key={trade.id}
-            className="flex items-center justify-between p-4 bg-gray-50 dark:bg-[#262626] rounded-2xl border border-gray-200 dark:border-[#404040] hover:border-gray-300 dark:hover:border-[#505050] transition-colors"
+            className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-[#0d1117] transition-colors"
           >
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <div
-                className={`p-2 rounded-xl ${
+                className={`p-2 rounded ${
                   trade.action === 'buy'
-                    ? 'bg-green-100 dark:bg-green-950/30'
-                    : 'bg-red-100 dark:bg-red-950/30'
+                    ? 'bg-green-50 dark:bg-green-950/20'
+                    : 'bg-red-50 dark:bg-red-950/20'
                 }`}
               >
                 {trade.action === 'buy' ? (
-                  <ArrowUpRight className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <ArrowUpRight className="w-4 h-4 text-green-600 dark:text-green-400" />
                 ) : (
-                  <ArrowDownRight className="w-5 h-5 text-red-600 dark:text-red-400" />
+                  <ArrowDownRight className="w-4 h-4 text-red-600 dark:text-red-400" />
                 )}
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-900 dark:text-white">
+                  <span className="font-medium text-sm text-gray-900 dark:text-white">
                     {trade.action === 'buy' ? 'Buy' : 'Sell'} {trade.type === 'fixed' ? 'Fixed' : 'Variable'}
                   </span>
                   <span
-                    className={`px-2 py-0.5 rounded-lg text-xs font-medium ${
+                    className={`px-2 py-0.5 rounded text-xs font-medium ${
                       trade.type === 'fixed'
-                        ? 'bg-indigo-100 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300'
-                        : 'bg-purple-100 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300'
+                        ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300'
+                        : 'bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300'
                     }`}
                   >
                     {trade.rate}%
                   </span>
                 </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   {trade.user} • {trade.timestamp}
                 </div>
               </div>
             </div>
             <div className="text-right">
-              <div className="font-bold text-gray-900 dark:text-white">
+              <div className="font-semibold text-sm text-gray-900 dark:text-white">
                 ${trade.amount.toLocaleString()}
               </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">USDC</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">USDC</div>
             </div>
           </div>
         ))}
       </div>
 
-      <button className="w-full mt-4 py-3 text-center text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
-        View all trades →
-      </button>
+      <div className="p-3 border-t border-gray-200 dark:border-[#30363d]">
+        <button className="w-full text-center text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+          View all trades →
+        </button>
+      </div>
     </div>
   );
 }
