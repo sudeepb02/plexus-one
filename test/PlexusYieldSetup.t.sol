@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.26;
 
-import {Test, console2} from "forge-std/Test.sol";
+import {Test, console, console2} from "forge-std/Test.sol";
 
 // V4 Core imports
 import {IHooks} from "v4-core/interfaces/IHooks.sol";

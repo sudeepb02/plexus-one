@@ -293,7 +293,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         assertApproxEqRel(expectedImpliedRate10Pct, 0.10e18, 0.001e18);
     }
 
-    /// @notice Test tokens are held in the hook and not the pool manager after initialization
+    /// @notice Test tokens are held in the pool manager after initialization
     function test_InitializeLiquidity_TokensInHook() public {
         // Register and initialize pool
         hook.registerPool(poolKey, address(yieldToken));
@@ -306,12 +306,12 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         // Initialize liquidity
         hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
 
-        // Verify tokens are in the hook
-        assertEq(underlying.balanceOf(address(hook)), managerUnderlyingBefore + INITIAL_LIQUIDITY_UNDERLYING);
-        assertEq(yieldToken.balanceOf(address(hook)), managerYtBefore + INITIAL_LIQUIDITY_YT);
+        // Verify tokens are in the Pool manager
+        assertEq(underlying.balanceOf(address(manager)), managerUnderlyingBefore + INITIAL_LIQUIDITY_UNDERLYING);
+        assertEq(yieldToken.balanceOf(address(manager)), managerYtBefore + INITIAL_LIQUIDITY_YT);
 
-        // Verify PoolManager tokens balance is 0
-        assertEq(underlying.balanceOf(address(manager)), 0);
-        assertEq(yieldToken.balanceOf(address(manager)), 0);
+        // Verify Hook tokens balance is 0
+        assertEq(underlying.balanceOf(address(hook)), 0);
+        assertEq(yieldToken.balanceOf(address(hook)), 0);
     }
 }

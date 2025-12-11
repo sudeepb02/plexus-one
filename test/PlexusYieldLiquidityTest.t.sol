@@ -437,6 +437,8 @@ contract PlexusYieldLiquidityTest is PlexusYieldHookSetup {
 
         uint256 aliceLpBalance = hook.balanceOf(alice, uint256(PoolId.unwrap(poolId)));
 
+        console.log("Alice LP Balance after adding liquidity:", aliceLpBalance);
+
         // Alice immediately removes all liquidity
         hook.removeLiquidity(poolKey, aliceLpBalance);
         vm.stopPrank();
@@ -551,7 +553,7 @@ contract PlexusYieldLiquidityTest is PlexusYieldHookSetup {
         vm.prank(alice);
         uint256 actualShares = hook.addLiquidity(poolKey, underlyingAmount, excessYt);
 
-        assertEq(actualShares, expectedShares);
-        assertEq(actualShares, shareU); // Confirms it used the underlying-based share
+        assertEq(actualShares, expectedShares, "!expectedShares");
+        assertEq(actualShares, shareU, "!sharesU"); // Confirms it used the underlying-based share
     }
 }
