@@ -1,16 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSwap } from '@/lib/SwapContext';
-import { ArrowDownUp, TrendingUp, TrendingDown, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, Calculator, Zap, DollarSign } from 'lucide-react';
+import { useAccount } from 'wagmi';
+import { ArrowDownUp, TrendingUp, TrendingDown, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, Calculator, Zap, DollarSign, AlertCircle } from 'lucide-react';
+import { formatUSDC } from '@/lib/v4-swap';
 
 export function SwapCard() {
-  const { swapMode, setSwapMode, inputAmount, setInputAmount, isLoading } = useSwap();
+  const { 
+    swapMode, 
+    setSwapMode, 
+    inputAmount, 
+    setInputAmount, 
+    isLoading,
+    error,
+    setError,
+    userBalance,
+    refreshBalance,
+    executeSwap
+  } = useSwap();
+
+  const { isConnected } = useAccount();
+
   const [estimatedOutput, setEstimatedOutput] = useState('0.00');
   const [showScenarios, setShowScenarios] = useState(false);
   const [advancedMode, setAdvancedMode] = useState(false);
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
   const [simulatedRate, setSimulatedRate] = useState(5.25);
+  const [balanceDisplay, setBalanceDisplay] = useState('0.00');
 
   // Mock implied rate - in production, fetch from contract
   const impliedRate = 5.25;
@@ -23,28 +40,48 @@ export function SwapCard() {
   // Position type: 'long' = betting rates go up, 'short' = betting rates go down
   const isLongPosition = swapMode === 'fixed';
 
+  // Refresh balance on mount and when connected
+  useEffect(() => {
+    if (isConnected) {
+      refreshBalance();
+    }
+  }, [isConnected, refreshBalance]);
+
+  // Update balance display
+  useEffect(() => {
+    setBalanceDisplay(formatUSDC(userBalance));
+  }, [userBalance]);
+
   const handleSwap = async () => {
-    // Swap logic here
-    console.log('Swapping:', { swapMode, inputAmount, estimatedOutput });
+    if (!isConnected) {
+      setError('Please connect your wallet');
+      return;
+    }
+
+    try {
+      await executeSwap(true); // true for exact input
+      setError(null);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Swap failed';
+      setError(errorMessage);
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputAmount(value);
+    setError(null);
     
-    // Fixed: Calculate output based on time-adjusted implied rate
-    // YT value = Principal * Rate * Time
+    // Calculate output based on time-adjusted implied rate
     const principal = parseFloat(value) || 0;
     
     if (swapMode === 'fixed') {
       // Buying YT (Long): How many YT tokens do we get for our USDC?
-      // YT Price = Rate * Time (e.g., 5.25% * 0.5 years = 2.625% of principal)
       const ytPrice = (impliedRate / 100) * yearsToMaturity;
       const ytAmount = principal / ytPrice;
       setEstimatedOutput(ytAmount.toFixed(2));
     } else {
       // Selling YT (Short): How much USDC do we get for selling YT?
-      // With 10x leverage: can sell 10x worth of YT
       const ytPrice = (impliedRate / 100) * yearsToMaturity;
       const ytAmount = (principal * 10) / ytPrice;
       setEstimatedOutput(ytAmount.toFixed(2));
@@ -53,29 +90,21 @@ export function SwapCard() {
     setShowScenarios(parseFloat(value) > 0);
   };
 
-  // Fixed: Calculate P&L at a specific rate (time-adjusted)
   const calculatePnLAtRate = (rate: number) => {
     if (!inputAmount || parseFloat(inputAmount) === 0) return 0;
     const amountIn = parseFloat(inputAmount);
     const ytAmount = parseFloat(estimatedOutput);
 
     if (isLongPosition) {
-      // Long Position: Bought YT, profit when actual yield > implied
-      // Cost: amountIn USDC
-      // Payout at maturity: ytAmount * (actualRate / 100) * yearsToMaturity
       const payout = ytAmount * (rate / 100) * yearsToMaturity;
       return payout - amountIn;
     } else {
-      // Short Position: Sold YT, profit when actual yield < implied
-      // Premium received: YT sold at implied rate
       const premiumReceived = ytAmount * (impliedRate / 100) * yearsToMaturity;
-      // Debt at maturity: ytAmount * (actualRate / 100) * yearsToMaturity
       const debt = ytAmount * (rate / 100) * yearsToMaturity;
       return premiumReceived - debt;
     }
   };
 
-  // Fixed: Calculate breakeven rate (time-adjusted)
   const calculateBreakeven = () => {
     if (!inputAmount || parseFloat(inputAmount) === 0) return impliedRate;
     const amountIn = parseFloat(inputAmount);
@@ -83,16 +112,13 @@ export function SwapCard() {
     
     if (ytAmount === 0 || yearsToMaturity === 0) return impliedRate;
     
-    // Breakeven is where P&L = 0
-    // For long: payout = cost => ytAmount * (rate/100) * time = amountIn
-    // rate = (amountIn / (ytAmount * time)) * 100
     return (amountIn / (ytAmount * yearsToMaturity)) * 100;
   };
 
   const breakeven = calculateBreakeven();
   const simulatedPnL = calculatePnLAtRate(simulatedRate);
 
-  // Improved: Token Logo Component
+  // Token Logo Components
   const USDCLogo = () => (
     <div className="relative w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 flex items-center justify-center shadow-md ring-2 ring-blue-300 dark:ring-blue-800">
       <DollarSign className="w-3.5 h-3.5 text-white font-bold" strokeWidth={3} />
@@ -159,7 +185,25 @@ export function SwapCard() {
       </div>
 
       <div className="p-4 space-y-3">
-        {/* Position Selector - Improved Colors */}
+        {/* Connection Warning */}
+        {!isConnected && (
+          <div className="flex items-start gap-2 p-2.5 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/30 dark:to-cyan-950/30 rounded-lg border border-blue-200 dark:border-blue-800/50">
+            <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+            <span className="text-xs text-blue-900 dark:text-blue-200">
+              Connect your wallet to execute swaps
+            </span>
+          </div>
+        )}
+
+        {/* Error Display */}
+        {error && (
+          <div className="flex items-start gap-2 p-2.5 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 rounded-lg border border-red-200 dark:border-red-800/50">
+            <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+            <span className="text-xs text-red-900 dark:text-red-200">{error}</span>
+          </div>
+        )}
+
+        {/* Position Selector */}
         <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-[#0d1117] rounded-lg">
           <button
             onClick={() => setSwapMode('fixed')}
@@ -189,7 +233,7 @@ export function SwapCard() {
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="text-gray-600 dark:text-gray-400">You pay</span>
-            <span className="text-gray-500 dark:text-gray-400">Balance: 0.00</span>
+            <span className="text-gray-500 dark:text-gray-400">Balance: {balanceDisplay}</span>
           </div>
           <div className="relative">
             <input
@@ -197,7 +241,8 @@ export function SwapCard() {
               value={inputAmount}
               onChange={handleInputChange}
               placeholder="0.00"
-              className="w-full px-3 py-2.5 pr-24 bg-gray-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#30363d] rounded-lg text-lg font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+              disabled={!isConnected}
+              className="w-full px-3 py-2.5 pr-24 bg-gray-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#30363d] rounded-lg text-lg font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
               <USDCLogo />
@@ -233,24 +278,6 @@ export function SwapCard() {
             </div>
           </div>
         </div>
-
-        {/* Breakeven Display - Compact
-        {showScenarios && (
-          <div className="flex items-center justify-between p-2.5 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 rounded-lg border border-purple-200 dark:border-purple-800/50 shadow-sm">
-            <div className="flex items-center gap-1.5">
-              <Calculator className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-              <span className="text-xs font-semibold text-gray-900 dark:text-white">Breakeven</span>
-              <Tooltip
-                id="breakeven"
-                title="Breakeven Rate"
-                description="The yield rate where you neither profit nor lose."
-              />
-            </div>
-            <span className="text-base font-bold text-purple-600 dark:text-purple-400">
-              {breakeven.toFixed(2)}%
-            </span>
-          </div>
-        )} */}
 
         {/* Collateral Warning */}
         {swapMode === 'variable' && parseFloat(inputAmount) > 0 && (
@@ -291,7 +318,7 @@ export function SwapCard() {
                 <span>15%</span>
               </div>
               
-              {/* P&L Value Display - Inline */}
+              {/* P&L Value Display */}
               <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
                 <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
                   P&L at {simulatedRate.toFixed(2)}%:
@@ -314,10 +341,17 @@ export function SwapCard() {
         {/* Swap Button */}
         <button
           onClick={handleSwap}
-          disabled={!inputAmount || parseFloat(inputAmount) === 0 || isLoading}
+          disabled={!isConnected || !inputAmount || parseFloat(inputAmount) === 0 || isLoading}
           className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-700 dark:disabled:to-gray-800 text-white font-semibold rounded-lg transition-all disabled:cursor-not-allowed text-sm shadow-md hover:shadow-lg"
         >
-          {isLoading ? 'Processing...' : parseFloat(inputAmount) === 0 ? 'Enter amount' : 'Execute Swap'}
+          {!isConnected 
+            ? 'Connect Wallet' 
+            : isLoading 
+            ? 'Processing...' 
+            : parseFloat(inputAmount) === 0 
+            ? 'Enter amount' 
+            : 'Execute Swap'
+          }
         </button>
       </div>
     </div>
