@@ -22,10 +22,10 @@ import {Deployers} from "lib/v4-periphery/lib/v4-core/test/utils/Deployers.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 // Project imports
-import {PlexusYieldHook} from "../src/PlexusYieldHook.sol";
-import {YieldToken} from "../src/YieldToken.sol";
-import {MockYieldOracle} from "../src/mocks/MockYieldOracle.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
+import {PlexusYieldHook} from "src/PlexusYieldHook.sol";
+import {YieldToken} from "src/YieldToken.sol";
+import {MockYieldOracle} from "src/mocks/MockYieldOracle.sol";
+import {MockERC20} from "src/mocks/MockERC20.sol";
 
 contract PlexusYieldHookSetup is Test, Deployers {
     using PoolIdLibrary for PoolKey;
