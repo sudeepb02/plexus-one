@@ -14,6 +14,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
     /////////////////////////////////////////////////////////////////////////////////////
 
     function test_RegisterPool_Success() public {
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
 
         address registered = hook.registeredYieldTokens(poolId);
@@ -33,9 +34,10 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
             currency1: poolKey.currency1,
             fee: 500, // 0.05% fixed fee
             tickSpacing: 60,
-            hooks: IHooks(address(0x1234))
+            hooks: IHooks(address(0x5678)) // Different from owner (0x1234)
         });
 
+        vm.prank(owner);
         vm.expectRevert(PlexusYieldHook.InvalidHook.selector);
         hook.registerPool(badKey, address(yieldToken));
     }
@@ -54,6 +56,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
             hooks: IHooks(address(hook))
         });
 
+        vm.prank(owner);
         vm.expectRevert(PlexusYieldHook.InvalidCurrency.selector);
         hook.registerPool(badKey, address(yieldToken));
     }
@@ -63,6 +66,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
     /////////////////////////////////////////////////////////////////////////////////////
 
     function test_Initialize_Success() public {
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
@@ -94,6 +98,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         // Warp to after maturity
         vm.warp(maturity + 1);
 
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
 
         vm.expectRevert(); // PoolManager wraps errors
@@ -106,27 +111,31 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
 
     function test_InitializeLiquidity_Success() public {
         // Register and initialize pool first
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
-        // Record balances before
-        uint256 underlyingBefore = underlying.balanceOf(address(this));
-        uint256 ytBefore = yieldToken.balanceOf(address(this));
+        // Record balances before (owner's balances since owner will add liquidity)
+        uint256 underlyingBefore = underlying.balanceOf(owner);
+        uint256 ytBefore = yieldToken.balanceOf(owner);
 
-        // Initialize liquidity
+        // Initialize liquidity as owner
+        vm.prank(owner);
         hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
 
-        // Verify tokens were transferred
-        assertEq(underlying.balanceOf(address(this)), underlyingBefore - INITIAL_LIQUIDITY_UNDERLYING);
-        assertEq(yieldToken.balanceOf(address(this)), ytBefore - INITIAL_LIQUIDITY_YT);
+        // Verify tokens were transferred from owner
+        assertEq(underlying.balanceOf(owner), underlyingBefore - INITIAL_LIQUIDITY_UNDERLYING);
+        assertEq(yieldToken.balanceOf(owner), ytBefore - INITIAL_LIQUIDITY_YT);
     }
 
     function test_InitializeLiquidity_CorrectReserves() public {
         // Register and initialize pool first
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
         // Initialize liquidity
+        vm.prank(owner);
         hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
 
         // Verify reserves are set correctly
@@ -138,10 +147,12 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
 
     function test_InitializeLiquidity_CorrectLpTokensMinted() public {
         // Register and initialize pool first
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
-        // Initialize liquidity
+        // Initialize liquidity as owner
+        vm.prank(owner);
         hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
 
         // Verify LP tokens minted
@@ -152,12 +163,13 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         assertEq(totalLpSupply, expectedLpTokens);
 
         // Verify owner received LP tokens
-        uint256 ownerLpBalance = hook.balanceOf(address(this), uint256(PoolId.unwrap(poolId)));
+        uint256 ownerLpBalance = hook.balanceOf(owner, uint256(PoolId.unwrap(poolId)));
         assertEq(ownerLpBalance, expectedLpTokens);
     }
 
     function testRevert_InitializeLiquidity_OnlyOwner() public {
         // Register and initialize pool first
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
@@ -178,32 +190,37 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         // Full initialization
         _initializePoolWithLiquidity();
 
-        uint256 lpBalanceBefore = hook.balanceOf(address(this), uint256(PoolId.unwrap(poolId)));
+        uint256 lpBalanceBefore = hook.balanceOf(owner, uint256(PoolId.unwrap(poolId)));
 
-        // Initializing liquidity again
+        // Initializing liquidity again as owner
+        vm.prank(owner);
         hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
 
-        uint256 lpBalanceAfter = hook.balanceOf(address(this), uint256(PoolId.unwrap(poolId)));
+        uint256 lpBalanceAfter = hook.balanceOf(owner, uint256(PoolId.unwrap(poolId)));
 
         assertGt(lpBalanceAfter, lpBalanceBefore);
     }
 
     function testRevert_InitializeLiquidity_ZeroUnderlying() public {
         // Register and initialize pool first
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
-        // Try to initialize with zero underlying
+        // Try to initialize with zero underlying as owner
+        vm.prank(owner);
         vm.expectRevert(PlexusYieldHook.InvalidAmount.selector);
         hook.addLiquidity(poolKey, 0, INITIAL_LIQUIDITY_YT);
     }
 
     function testRevert_InitializeLiquidity_ZeroYieldToken() public {
         // Register and initialize pool first
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
-        // Try to initialize with zero yield token
+        // Try to initialize with zero yield token as owner
+        vm.prank(owner);
         vm.expectRevert(PlexusYieldHook.InvalidAmount.selector);
         hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, 0);
     }
@@ -217,6 +234,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
     /// With 5,000 underlying and 100,000 YT: 5,000 / 100,000 = 0.05
     function test_InitializeLiquidity_5PercentAPR_CorrectImpliedRate() public {
         // Register and initialize pool
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
@@ -224,6 +242,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         uint256 underlyingAmount = 5_000 * 1e6; // 5k USDC
         uint256 ytAmount = 100_000 * 1e6; // 100k YT
 
+        vm.prank(owner);
         hook.addLiquidity(poolKey, underlyingAmount, ytAmount);
 
         // Verify reserves
@@ -241,6 +260,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
     /// Spot Price = t * (R_und / R_yield) where t is time to maturity fraction
     function test_InitializeLiquidity_5PercentAPR_CorrectSpotPrice() public {
         // Register and initialize pool
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
@@ -248,6 +268,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         uint256 underlyingAmount = 5_000 * 1e6;
         uint256 ytAmount = 100_000 * 1e6;
 
+        vm.prank(owner);
         hook.addLiquidity(poolKey, underlyingAmount, ytAmount);
 
         // Get market state
@@ -276,8 +297,10 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         // We'll test that 10% APR gives 10x the price of 1% APR
 
         // Setup for 1% APR pool
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
         manager.initialize(poolKey, SQRT_PRICE_1_1);
+        vm.prank(owner);
         hook.addLiquidity(poolKey, 1_000 * 1e6, 100_000 * 1e6);
 
         (uint128 reserve1Pct_Und, uint128 reserve1Pct_YT, , , , , ) = hook.marketStates(poolId);
@@ -296,6 +319,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
     /// @notice Test tokens are held in the pool manager after initialization
     function test_InitializeLiquidity_TokensInHook() public {
         // Register and initialize pool
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
@@ -304,6 +328,7 @@ contract PlexusYieldInitialTest is PlexusYieldHookSetup {
         uint256 managerYtBefore = yieldToken.balanceOf(address(manager));
 
         // Initialize liquidity
+        vm.prank(owner);
         hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
 
         // Verify tokens are in the Pool manager

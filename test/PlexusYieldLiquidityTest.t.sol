@@ -141,7 +141,7 @@ contract PlexusYieldLiquidityTest is PlexusYieldHookSetup {
 
         // Verify total LP supply increased appropriately
         (, , uint128 totalLpSupply, , , , ) = hook.marketStates(poolId);
-        uint256 ownerLp = hook.balanceOf(address(this), uint256(PoolId.unwrap(poolId)));
+        uint256 ownerLp = hook.balanceOf(owner, uint256(PoolId.unwrap(poolId)));
 
         assertEq(totalLpSupply, ownerLp + aliceLp + bobLp + lp1Balance + lp2Balance);
     }
@@ -503,8 +503,8 @@ contract PlexusYieldLiquidityTest is PlexusYieldHookSetup {
         vm.prank(lp1);
         hook.addLiquidity(poolKey, underlyingAmount, ytAmount);
 
-        // Get all balances
-        uint256 ownerLp = hook.balanceOf(address(this), uint256(PoolId.unwrap(poolId)));
+        // Get all balances (owner is the one who added initial liquidity)
+        uint256 ownerLp = hook.balanceOf(owner, uint256(PoolId.unwrap(poolId)));
         uint256 aliceLp = hook.balanceOf(alice, uint256(PoolId.unwrap(poolId)));
         uint256 bobLp = hook.balanceOf(bob, uint256(PoolId.unwrap(poolId)));
         uint256 lp1Lp = hook.balanceOf(lp1, uint256(PoolId.unwrap(poolId)));
@@ -518,7 +518,7 @@ contract PlexusYieldLiquidityTest is PlexusYieldHookSetup {
 
     function test_LpToken_ProRataShare() public {
         // Get initial owner LP balance (from initialization)
-        uint256 ownerLp = hook.balanceOf(address(this), uint256(PoolId.unwrap(poolId)));
+        uint256 ownerLp = hook.balanceOf(owner, uint256(PoolId.unwrap(poolId)));
 
         // Alice adds the same amount as initial liquidity
         uint256 ytAmount = _calculateRequiredYt(INITIAL_LIQUIDITY_UNDERLYING);

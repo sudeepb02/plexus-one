@@ -49,6 +49,7 @@ contract PlexusYieldHookSetup is Test, Deployers {
     address public bob = address(0x2);
     address public lp1 = address(0x3);
     address public lp2 = address(0x4);
+    address public owner = address(0x1234);
 
     // Constants
     uint256 public maturity;
@@ -82,7 +83,7 @@ contract PlexusYieldHookSetup is Test, Deployers {
                 Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG
         );
 
-        deployCodeTo("PlexusYieldHook.sol", abi.encode(address(manager)), address(flags));
+        deployCodeTo("PlexusYieldHook.sol", abi.encode(address(manager), owner), address(flags));
         hook = PlexusYieldHook(payable(address(flags)));
 
         // Step 5: Sort currencies (token0 < token1 by address)
@@ -120,6 +121,7 @@ contract PlexusYieldHookSetup is Test, Deployers {
         underlying.mint(bob, INITIAL_UNDERLYING_SUPPLY);
         underlying.mint(lp1, INITIAL_UNDERLYING_SUPPLY);
         underlying.mint(lp2, INITIAL_UNDERLYING_SUPPLY);
+        underlying.mint(owner, INITIAL_UNDERLYING_SUPPLY);
 
         // Users mint YieldTokens by creating short positions
         // Owner mints YT for initial liquidity
@@ -144,6 +146,12 @@ contract PlexusYieldHookSetup is Test, Deployers {
         vm.startPrank(lp2);
         underlying.approve(address(yieldToken), type(uint256).max);
         yieldToken.mintSynthetic(100_000 * 1e6, 100_000 * 1e6);
+        vm.stopPrank();
+
+        // Owner mints YT for initial liquidity
+        vm.startPrank(owner);
+        underlying.approve(address(yieldToken), type(uint256).max);
+        yieldToken.mintSynthetic(200_000 * 1e6, 200_000 * 1e6);
         vm.stopPrank();
     }
 
@@ -193,11 +201,22 @@ contract PlexusYieldHookSetup is Test, Deployers {
         yieldToken.approve(address(hook), type(uint256).max);
         yieldToken.approve(address(swapRouter), type(uint256).max);
         vm.stopPrank();
+
+        // Hook owner approvals
+        vm.startPrank(owner);
+        underlying.approve(address(hook), type(uint256).max);
+        underlying.approve(address(swapRouter), type(uint256).max);
+        underlying.approve(address(manager), type(uint256).max);
+        yieldToken.approve(address(hook), type(uint256).max);
+        yieldToken.approve(address(swapRouter), type(uint256).max);
+        yieldToken.approve(address(manager), type(uint256).max);
+        vm.stopPrank();
     }
 
     /// @notice Helper to fully initialize the pool with liquidity
     function _initializePoolWithLiquidity() internal {
-        // 1. Register the pool
+        // 1. Register the pool (owner only)
+        vm.prank(owner);
         hook.registerPool(poolKey, address(yieldToken));
 
         // 2. Initialize the pool in PoolManager with 1:1 price.
@@ -206,6 +225,7 @@ contract PlexusYieldHookSetup is Test, Deployers {
         manager.initialize(poolKey, SQRT_PRICE_1_1);
 
         // 3. Seed initial liquidity via hook (owner only)
+        vm.prank(owner);
         hook.addLiquidity(poolKey, INITIAL_LIQUIDITY_UNDERLYING, INITIAL_LIQUIDITY_YT);
     }
 }
