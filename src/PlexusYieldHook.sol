@@ -76,7 +76,7 @@ contract PlexusYieldHook is BaseHook, Ownable, ERC6909, IUnlockCallback {
     // Registry for valid pools
     mapping(PoolId => address) public registeredYieldTokens;
 
-    constructor(IPoolManager _manager) BaseHook(_manager) Ownable(msg.sender) {}
+    constructor(IPoolManager _manager, address  _owner) BaseHook(_manager) Ownable(_owner) {}
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return
