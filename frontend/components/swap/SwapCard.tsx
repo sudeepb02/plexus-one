@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useSwap } from '@/lib/SwapContext';
-import { useAccount } from 'wagmi';
-import { ArrowDownUp, TrendingUp, TrendingDown, Info, ChevronDown, ChevronUp, AlertTriangle, Clock, Calculator, Zap, DollarSign, AlertCircle } from 'lucide-react';
-import { formatUSDC } from '@/lib/v4-swap';
+import { useAccount, usePublicClient } from 'wagmi';
+import { ArrowDownUp, TrendingUp, TrendingDown, Info, Zap, DollarSign, AlertCircle } from 'lucide-react';
+import { formatUSDC, parseUSDC, calculateExpectedOutput, PLEXUS_YIELD_HOOK_ABI, buildPoolKey } from '@/lib/v4-swap';
+import { CONTRACTS } from '@/lib/contracts';
+import { Address, keccak256, encodePacked, encodeAbiParameters } from 'viem';
 
 export function SwapCard() {
   const { 
@@ -21,6 +23,7 @@ export function SwapCard() {
   } = useSwap();
 
   const { isConnected } = useAccount();
+  const publicClient = usePublicClient();
 
   const [estimatedOutput, setEstimatedOutput] = useState('0.00');
   const [showScenarios, setShowScenarios] = useState(false);
@@ -30,26 +33,129 @@ export function SwapCard() {
   const [balanceDisplay, setBalanceDisplay] = useState('0.00');
   const [collateralRequired, setCollateralRequired] = useState('0.00');
   const [ammProceeds, setAmmProceeds] = useState('0.00');
+  const [reserveUnderlying, setReserveUnderlying] = useState<bigint>(BigInt(0));
+  const [reserveYield, setReserveYield] = useState<bigint>(BigInt(0));
 
-  // Mock implied rate - in production, fetch from contract
-  const impliedRate = 5.25;
-  
+  const poolKey = buildPoolKey();
+
+  // Hardcoded reserve values from the deployment
+  // From ConfigureMarket.s.sol: initial_liquidity_underlying = 1250 * 1e6, initial_liquidity_yt = 100_000 * 1e6
+  const HARDCODED_RESERVE_UNDERLYING = BigInt(1250) * BigInt(10) ** BigInt(6); // 1250 USDC
+  const HARDCODED_RESERVE_YIELD = BigInt(100_000) * BigInt(10) ** BigInt(6); // 100,000 YT
+
   // Mock maturity date - in production, fetch from contract
   const maturityDate = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000);
   const daysToMaturity = Math.floor((maturityDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
   const yearsToMaturity = daysToMaturity / 365;
   
-  // Position type: 'long' = betting rates go up, 'short' = betting rates go down
   const isLongPosition = swapMode === 'fixed';
   const isShortPosition = swapMode === 'variable';
 
-  // Collateral ratio (e.g., 10% of the YT notional to cover margin)
   const COLLATERAL_RATIO = 0.1;
 
-  // Refresh balance on mount and when connected
+  // Fetch pool reserves
+  const fetchPoolReserves = async () => {
+    if (!publicClient) {
+      console.warn('publicClient not available');
+      return;
+    }
+
+    try {
+      console.log('Starting fetchPoolReserves...');
+      console.log('Pool key details:', {
+        currency0: poolKey.currency0,
+        currency1: poolKey.currency1,
+        fee: poolKey.fee,
+        tickSpacing: poolKey.tickSpacing,
+        hooks: poolKey.hooks,
+      });
+
+      // Use the Solidity keccak256 hashing of PoolKey struct fields
+      // According to V4 PoolIdLibrary: poolId = keccak256(abi.encode(poolKey))
+      // We need to use encodeAbiParameters to match abi.encode() behavior
+      const encoded = encodeAbiParameters(
+        [
+          {
+            type: 'tuple',
+            components: [
+              { name: 'currency0', type: 'address' },
+              { name: 'currency1', type: 'address' },
+              { name: 'fee', type: 'uint24' },
+              { name: 'tickSpacing', type: 'int24' },
+              { name: 'hooks', type: 'address' }
+            ]
+          }
+        ],
+        [
+          {
+            currency0: poolKey.currency0,
+            currency1: poolKey.currency1,
+            fee: poolKey.fee,
+            tickSpacing: poolKey.tickSpacing,
+            hooks: poolKey.hooks
+          }
+        ]
+      );
+
+      const poolId = keccak256(encoded);
+
+      console.log('Calculated poolId:', poolId);
+
+      // Try to read the market state from the hook
+      try {
+        const marketState = await publicClient.readContract({
+          address: CONTRACTS.PLEXUS_YIELD_HOOK as Address,
+          abi: PLEXUS_YIELD_HOOK_ABI,
+          functionName: 'marketStates',
+          args: [poolId as any],
+        }) as any;
+
+        console.log('Market state fetched successfully:', {
+          reserveUnderlying: marketState[0].toString(),
+          reserveYield: marketState[1].toString(),
+          totalLpSupply: marketState[2].toString(),
+          impliedRate: marketState[3].toString(),
+          maturity: marketState[4].toString(),
+          isInitialized: marketState[5],
+        });
+
+        if (!marketState[5]) {
+          console.warn('Pool is not initialized in hook yet');
+          return;
+        }
+
+        setReserveUnderlying(marketState[0]);
+        setReserveYield(marketState[1]);
+      } catch (contractErr) {
+        console.error('Contract call failed:', {
+          error: contractErr,
+          hookAddress: CONTRACTS.PLEXUS_YIELD_HOOK,
+          method: 'marketStates',
+          poolId,
+        });
+        
+        // Try alternative: read directly from hook storage (fallback)
+        console.log('Attempting alternative fetch method...');
+      }
+    } catch (err) {
+      console.error('Failed to fetch pool reserves:', err);
+    }
+  };
+
+  // Refresh balance and reserves on mount and when connected
   useEffect(() => {
     if (isConnected) {
+      console.log('Connected, fetching initial data');
       refreshBalance();
+      fetchPoolReserves();
+
+      // Polling: refresh reserves every 5 seconds
+      const interval = setInterval(() => {
+        console.log('Polling reserves...');
+        fetchPoolReserves();
+      }, 5000);
+
+      return () => clearInterval(interval);
     }
   }, [isConnected, refreshBalance]);
 
@@ -80,27 +186,88 @@ export function SwapCard() {
     
     const inputVal = parseFloat(value) || 0;
     
-    if (isShortPosition) {
-      // SHORTS MODE: Input is YT Amount to Short
-      // Step 1: Calculate collateral required to mint YT
-      const collateral = inputVal * COLLATERAL_RATIO;
-      setCollateralRequired(collateral.toFixed(2));
-      
-      // Step 2: Calculate proceeds from selling YT on AMM
-      const ytPrice = (impliedRate / 100) * yearsToMaturity;
-      const proceeds = inputVal * ytPrice;
-      setAmmProceeds(proceeds.toFixed(2));
-      setEstimatedOutput(proceeds.toFixed(2));
+    // Recalculate output with current reserves
+    if (inputVal > 0) {
+      calculateAndSetOutput(value);
     } else {
-      // LONG MODE: Input is USDC, output is YT
-      const principal = inputVal;
-      const ytPrice = (impliedRate / 100) * yearsToMaturity;
-      const ytAmount = principal / ytPrice;
-      setEstimatedOutput(ytAmount.toFixed(2));
+      setEstimatedOutput('0.00');
+      setAmmProceeds('0.00');
+      setCollateralRequired('0.00');
     }
     
     setShowScenarios(inputVal > 0);
   };
+
+  // Calculate output based on current reserves
+  const calculateAndSetOutput = (inputAmountStr: string) => {
+    const inputVal = parseFloat(inputAmountStr) || 0;
+    
+    // Use hardcoded reserves instead of fetched ones
+    const currentReserveUnderlying = HARDCODED_RESERVE_UNDERLYING;
+    const currentReserveYield = HARDCODED_RESERVE_YIELD;
+    
+    console.log('calculateAndSetOutput called with:', {
+      inputAmountStr,
+      inputVal,
+      reserveUnderlying: currentReserveUnderlying.toString(),
+      reserveYield: currentReserveYield.toString(),
+      isShortPosition,
+    });
+    
+    if (isShortPosition) {
+      // SHORTS MODE: Input is YT Amount to Short
+      const collateral = inputVal * COLLATERAL_RATIO;
+      setCollateralRequired(collateral.toFixed(2));
+      
+      // Calculate proceeds based on pool reserves
+      if (currentReserveYield > BigInt(0) && currentReserveUnderlying > BigInt(0)) {
+        const inputAmountWei = parseUSDC(inputAmountStr);
+        const expectedProceeds = calculateExpectedOutput(inputAmountWei, currentReserveYield, currentReserveUnderlying);
+        const proceedsFormatted = formatUSDC(expectedProceeds);
+        console.log('Short proceeds calculated:', {
+          inputAmountWei: inputAmountWei.toString(),
+          expectedProceeds: expectedProceeds.toString(),
+          proceedsFormatted,
+        });
+        setAmmProceeds(proceedsFormatted);
+        setEstimatedOutput(proceedsFormatted);
+      } else {
+        console.log('Reserves not ready for short calculation');
+        setEstimatedOutput('0.00');
+        setAmmProceeds('0.00');
+      }
+    } else {
+      // LONG MODE: Input is USDC, output is YT
+      // Calculate expected YT received based on pool reserves
+      if (currentReserveUnderlying > BigInt(0) && currentReserveYield > BigInt(0)) {
+        const inputAmountWei = parseUSDC(inputAmountStr);
+        const expectedOutput = calculateExpectedOutput(inputAmountWei, currentReserveUnderlying, currentReserveYield);
+        const outputFormatted = formatUSDC(expectedOutput);
+        console.log('Long output calculated:', {
+          inputAmountWei: inputAmountWei.toString(),
+          expectedOutput: expectedOutput.toString(),
+          outputFormatted,
+        });
+        setEstimatedOutput(outputFormatted);
+      } else {
+        console.log('Reserves not ready for long calculation');
+        setEstimatedOutput('0.00');
+      }
+    }
+  };
+
+  // Recalculate output whenever swap mode changes
+  useEffect(() => {
+    console.log('useEffect triggered - mode changed:', {
+      reserveUnderlying: HARDCODED_RESERVE_UNDERLYING.toString(),
+      reserveYield: HARDCODED_RESERVE_YIELD.toString(),
+      inputAmount,
+      swapMode,
+    });
+    if (inputAmount && parseFloat(inputAmount) > 0) {
+      calculateAndSetOutput(inputAmount);
+    }
+  }, [swapMode]);
 
   const calculatePnLAtRate = (rate: number) => {
     if (!inputAmount || parseFloat(inputAmount) === 0) return 0;
@@ -118,18 +285,17 @@ export function SwapCard() {
   };
 
   const calculateBreakeven = () => {
-    if (!inputAmount || parseFloat(inputAmount) === 0) return impliedRate;
+    if (!inputAmount || parseFloat(inputAmount) === 0) return 5.25;
     
     if (isShortPosition) {
-      // For shorts: breakeven is when debt equals premium received
       const ytAmount = parseFloat(inputAmount);
       const premiumReceived = parseFloat(ammProceeds);
-      if (ytAmount === 0 || yearsToMaturity === 0) return impliedRate;
+      if (ytAmount === 0 || yearsToMaturity === 0) return 5.25;
       return (premiumReceived / (ytAmount * yearsToMaturity)) * 100;
     } else {
       const amountIn = parseFloat(inputAmount);
       const ytAmount = parseFloat(estimatedOutput);
-      if (ytAmount === 0 || yearsToMaturity === 0) return impliedRate;
+      if (ytAmount === 0 || yearsToMaturity === 0) return 5.25;
       return (amountIn / (ytAmount * yearsToMaturity)) * 100;
     }
   };
@@ -187,17 +353,16 @@ export function SwapCard() {
         {/* Compact Info Row */}
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-gray-400" />
             <span className="text-gray-600 dark:text-gray-400">Maturity:</span>
             <span className="font-medium text-gray-900 dark:text-white">{daysToMaturity}d</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-gray-600 dark:text-gray-400">Implied Rate:</span>
-            <span className="text-base font-bold text-blue-600 dark:text-blue-400">{impliedRate}%</span>
+            <span className="text-gray-600 dark:text-gray-400">Breakeven Rate:</span>
+            <span className="text-base font-bold text-blue-600 dark:text-blue-400">{breakeven.toFixed(2)}%</span>
             <Tooltip
-              id="implied-rate"
-              title="Implied Rate"
-              description="The market's expected yield rate based on current prices."
+              id="breakeven-rate"
+              title="Breakeven Rate"
+              description="The yield rate at which your position breaks even at maturity."
             />
           </div>
         </div>
@@ -217,7 +382,7 @@ export function SwapCard() {
         {/* Error Display */}
         {error && (
           <div className="flex items-start gap-2 p-2.5 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 rounded-lg border border-red-200 dark:border-red-800/50">
-            <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
             <span className="text-xs text-red-900 dark:text-red-200">{error}</span>
           </div>
         )}
@@ -285,7 +450,7 @@ export function SwapCard() {
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600 dark:text-gray-400">You receive</span>
-                <span className="text-gray-500 dark:text-gray-400">Buying YT</span>
+                <span className="text-gray-500 dark:text-gray-400">Est. YT</span>
               </div>
               <div className="relative">
                 <input
@@ -339,7 +504,7 @@ export function SwapCard() {
               <div className="p-3 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-950/20 rounded-lg border border-blue-200 dark:border-blue-800/50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Calculator className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     <div>
                       <div className="text-xs font-medium text-blue-900 dark:text-blue-200">Step 1: Mint YT with Collateral</div>
                       <div className="text-xs text-blue-800 dark:text-blue-300 mt-0.5">Collateral required to mint {inputAmount} YT</div>

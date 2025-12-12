@@ -79,6 +79,27 @@ export const SWAP_TEST_ABI = [
   }
 ] as const;
 
+// PlexusYieldHook ABI - for reading market state
+export const PLEXUS_YIELD_HOOK_ABI = [
+  {
+    name: 'marketStates',
+    type: 'function',
+    inputs: [
+      { name: 'poolId', type: 'bytes32' }
+    ],
+    outputs: [
+      { name: 'reserveUnderlying', type: 'uint128' },
+      { name: 'reserveYield', type: 'uint128' },
+      { name: 'totalLpSupply', type: 'uint128' },
+      { name: 'impliedRate', type: 'uint256' },
+      { name: 'maturity', type: 'uint256' },
+      { name: 'isInitialized', type: 'bool' },
+      { name: 'hasPendingYield', type: 'bool' }
+    ],
+    stateMutability: 'view'
+  }
+] as const;
+
 export interface PoolKey {
   currency0: Address;
   currency1: Address;
@@ -121,6 +142,25 @@ export function encodeApproval(spender: Address, amount: bigint): Hex {
     functionName: 'approve',
     args: [spender, amount]
   });
+}
+
+/**
+ * Calculate expected output amount based on pool reserves
+ * Uses the same formula as the Solidity tests:
+ * expectedOutput = (amountIn * reserveOutput) / reserveInput
+ * 
+ * @param amountIn - Input amount in wei
+ * @param reserveInput - Reserve of input token in wei
+ * @param reserveOutput - Reserve of output token in wei
+ * @returns Expected output amount in wei
+ */
+export function calculateExpectedOutput(
+  amountIn: bigint,
+  reserveInput: bigint,
+  reserveOutput: bigint
+): bigint {
+  if (reserveInput === BigInt(0)) return BigInt(0);
+  return (amountIn * reserveOutput) / reserveInput;
 }
 
 /**

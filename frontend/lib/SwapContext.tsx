@@ -70,6 +70,29 @@ export function SwapProvider({ children }: { children: ReactNode }) {
   };
 
   /**
+   * Get token balance for a specific token
+   */
+  const getTokenBalance = async (tokenAddress: Address): Promise<bigint> => {
+    if (!userAddress || !publicClient) {
+      return BigInt(0);
+    }
+
+    try {
+      const balance = await publicClient.readContract({
+        address: tokenAddress,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: [userAddress],
+      }) as bigint;
+
+      return balance;
+    } catch (err) {
+      console.error('Failed to get token balance:', err);
+      return BigInt(0);
+    }
+  };
+
+  /**
    * Check current allowance and approve if necessary
    */
   const ensureApproval = async (
@@ -145,9 +168,14 @@ export function SwapProvider({ children }: { children: ReactNode }) {
     try {
       const amountIn = parseUSDC(inputAmount);
       
-      // Determine swap direction
+      // Determine swap direction and tokens
       const inputToken = swapMode === 'fixed' ? CONTRACTS.MOCK_USDC : CONTRACTS.YIELD_TOKEN;
+      const outputToken = swapMode === 'fixed' ? CONTRACTS.YIELD_TOKEN : CONTRACTS.MOCK_USDC;
       const zeroForOne = isZeroForOne(poolKey, inputToken as Address);
+
+      // Get balance BEFORE swap
+      const balanceBefore = await getTokenBalance(outputToken as Address);
+      console.log('Output token balance before swap:', balanceBefore.toString());
 
       // For exact input: amountSpecified is negative
       // For exact output: amountSpecified is positive
@@ -158,6 +186,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
         amountSpecified: amountSpecified.toString(),
         zeroForOne,
         inputToken,
+        outputToken,
         swapTestAddress: SWAP_TEST_ADDRESS,
       });
 
