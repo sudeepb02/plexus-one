@@ -198,6 +198,16 @@ export function SwapCard() {
     setShowScenarios(inputVal > 0);
   };
 
+  // Clear inputs and reset state when swapping modes
+  useEffect(() => {
+    setInputAmount('');
+    setEstimatedOutput('0.00');
+    setAmmProceeds('0.00');
+    setCollateralRequired('0.00');
+    setShowScenarios(false);
+    setError(null);
+  }, [swapMode]);
+
   // Calculate output based on current reserves
   const calculateAndSetOutput = (inputAmountStr: string) => {
     const inputVal = parseFloat(inputAmountStr) || 0;
@@ -305,8 +315,8 @@ export function SwapCard() {
 
   // Token Logo Components
   const USDCLogo = () => (
-    <div className="relative w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 flex items-center justify-center shadow-md ring-2 ring-blue-300 dark:ring-blue-800">
-      <DollarSign className="w-3.5 h-3.5 text-white font-bold" strokeWidth={3} />
+    <div className="relative w-6 h-6 rounded-full bg-gradient-to-br from-[#2775CA] to-[#1E5BA8] flex items-center justify-center shadow-md ring-2 ring-blue-400/30 dark:ring-blue-600/30">
+      <span className="text-white text-[7px] font-black tracking-tighter">USDC</span>
     </div>
   );
 
