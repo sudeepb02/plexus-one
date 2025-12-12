@@ -11,9 +11,7 @@ import {
   formatUSDC,
   ERC20_ABI,
   encodeApproval,
-  encodeSwap,
-  encodeRouterExecute,
-  getDeadline,
+  encodeSwapCall,
   PoolKey,
 } from './v4-swap';
 
@@ -51,6 +49,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
   const [userBalance, setUserBalance] = useState<bigint>(BigInt(0));
 
   const poolKey = buildPoolKey();
+  const SWAP_TEST_ADDRESS = '0x9140a78c1a137c7ff1c151ec8231272af78a99a4' as Address;
 
   // Refresh user balance
   const refreshBalance = async () => {
@@ -128,7 +127,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Execute swap
+  // Execute swap using SwapTest contract
   const executeSwap = async (isExactInput: boolean) => {
     if (!userAddress || !publicClient || !walletClient) {
       setError('Wallet not connected');
@@ -150,44 +149,40 @@ export function SwapProvider({ children }: { children: ReactNode }) {
       const inputToken = swapMode === 'fixed' ? CONTRACTS.MOCK_USDC : CONTRACTS.YIELD_TOKEN;
       const zeroForOne = isZeroForOne(poolKey, inputToken as Address);
 
-      // Calculate minimum output amount with 1% slippage
-      const slippageTolerance = BigInt(100); // 1% = 100 basis points
-      const minAmountOut = (amountIn * (BigInt(10000) - slippageTolerance)) / BigInt(10000);
+      // For exact input: amountSpecified is negative
+      // For exact output: amountSpecified is positive
+      const amountSpecified = isExactInput ? -amountIn : amountIn;
 
-      console.log('Swap details:', {
+      console.log('Swap parameters:', {
         poolKey,
-        amountIn: amountIn.toString(),
-        minAmountOut: minAmountOut.toString(),
+        amountSpecified: amountSpecified.toString(),
         zeroForOne,
         inputToken,
-        universalRouter: CONTRACTS.UNIVERSAL_ROUTER
+        swapTestAddress: SWAP_TEST_ADDRESS,
       });
 
-      // Step 1: Approve token to Universal Router
+      // Step 1: Approve token to SwapTest contract
       await ensureApproval(
         inputToken as Address,
-        CONTRACTS.UNIVERSAL_ROUTER as Address,
+        SWAP_TEST_ADDRESS,
         amountIn
       );
 
-      // Step 2: Encode the swap
-      const { commands, inputs } = encodeSwap(
+      // Step 2: Encode the swap call
+      const swapCalldata = encodeSwapCall(
         poolKey,
-        amountIn,
-        minAmountOut,
-        zeroForOne
+        amountSpecified,
+        zeroForOne,
+        '0x' as any
       );
-      
-      const deadline = getDeadline(600); // 10 minutes
-      const executeCalldata = encodeRouterExecute(commands, inputs, deadline);
 
-      console.log('Encoded calldata:', executeCalldata);
+      console.log('Encoded swap call:', swapCalldata);
 
-      // Step 3: Send swap transaction
+      // Step 3: Send swap transaction to SwapTest
       const swapTx = await walletClient.sendTransaction({
         account: userAddress,
-        to: CONTRACTS.UNIVERSAL_ROUTER as Address,
-        data: executeCalldata,
+        to: SWAP_TEST_ADDRESS,
+        data: swapCalldata,
         value: BigInt(0),
       });
 
