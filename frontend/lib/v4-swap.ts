@@ -203,7 +203,7 @@ export function encodeSwapCall(
       {
         currency0: poolKey.currency0,
         currency1: poolKey.currency1,
-        fee: poolKey.fee as any,
+        fee: poolKey.fee as unknown as any,
         tickSpacing: poolKey.tickSpacing,
         hooks: poolKey.hooks,
       },

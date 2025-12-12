@@ -12,7 +12,6 @@ import {
   ERC20_ABI,
   encodeApproval,
   encodeSwapCall,
-  PoolKey,
 } from './v4-swap';
 
 type SwapMode = 'fixed' | 'variable';

@@ -1,3 +1,5 @@
+'use client';
+
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { http } from 'wagmi';
 import { unichainSepolia } from 'wagmi/chains';

@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useSwap } from '@/lib/SwapContext';
 import { useAccount, usePublicClient } from 'wagmi';
-import { ArrowDownUp, TrendingUp, TrendingDown, Info, Zap, DollarSign, AlertCircle } from 'lucide-react';
+import { ArrowDownUp, TrendingUp, TrendingDown, Info, Zap, AlertCircle } from 'lucide-react';
 import { formatUSDC, parseUSDC, calculateExpectedOutput, PLEXUS_YIELD_HOOK_ABI, buildPoolKey } from '@/lib/v4-swap';
 import { CONTRACTS } from '@/lib/contracts';
-import { Address, keccak256, encodePacked, encodeAbiParameters } from 'viem';
+import { Address, keccak256, encodeAbiParameters } from 'viem';
 
 export function SwapCard() {
   const { 
@@ -103,10 +103,12 @@ export function SwapCard() {
 
       // Try to read the market state from the hook
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const marketState = await publicClient.readContract({
           address: CONTRACTS.PLEXUS_YIELD_HOOK as Address,
           abi: PLEXUS_YIELD_HOOK_ABI,
           functionName: 'marketStates',
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           args: [poolId as any],
         }) as any;
 
